@@ -1,0 +1,48 @@
+[project]
+name = "sar"
+version = "0.1.0"
+description = "Post-training a multi-turn text-to-SQL agent: SFT, DPO and multi-turn GRPO on verl"
+requires-python = ">=3.10,<3.13"
+# Runtime deps of the package itself. The GPU stack (torch, vllm, verl,
+# LLaMA-Factory) is installed by cluster/setup_env.sbatch, pinned for the
+# cluster's CUDA 12.8 driver, and is not listed here.
+dependencies = [
+  "pandas",
+  "pyarrow>=19",
+  "pydantic>=2",
+  "sqlglot",
+  "fastapi",
+  "uvicorn",
+  "httpx",
+  "prometheus-client",
+  "pyyaml",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-asyncio", "ruff", "mypy"]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = ["gpu: needs a GPU and the cluster env (skipped by default)"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+files = ["src/sar/sql_env", "src/sar/reward"]

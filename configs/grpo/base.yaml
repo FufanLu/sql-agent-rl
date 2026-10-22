@@ -1,0 +1,105 @@
+# Multi-turn GRPO for the text-to-SQL agent on one GPU. verl's own defaults
+# (ppo_trainer.yaml) fill in everything not set here; cluster/grpo.sbatch adds
+# the paths and the per-run overrides from configs/grpo/<run>.yaml.
+#
+# Starting point: SkyRL-SQL's recipe (examples/train/text_to_sql/run_skyrl_sql.sh),
+# scaled from 8 GPUs to 1: GRPO, 5 samples per question, up to 6 turns,
+# lr 1e-6, no KL term, grad clip 0.5, temperature 0.6 / top-p 0.95.
+hydra:
+  searchpath:
+    - pkg://verl.trainer.config
+
+defaults:
+  - ppo_trainer
+  - _self_
+
+algorithm:
+  adv_estimator: grpo          # group-relative advantage: no critic model
+  norm_adv_by_std_in_grpo: true
+  use_kl_in_reward: false
+
+data:
+  # cluster/grpo.sbatch exports SAR_DATA (processed parquet dir) and SAR_MODEL.
+  train_files: ${oc.env:SAR_DATA}/train.parquet
+  val_files: ${oc.env:SAR_DATA}/val_monitor.parquet
+  train_batch_size: 128        # questions per step (x rollout.n trajectories)
+  max_prompt_length: 6144      # schema + question; SynSQL/BIRD schemas are long
+  max_response_length: 8192    # all assistant turns + tool results of one trajectory
+  filter_overlong_prompts: true
+  truncation: error
+  return_raw_chat: true
+  dataloader_num_workers: 4
+  shuffle: true
+
+actor_rollout_ref:
+  hybrid_engine: true          # actor, rollout and ref share the GPU, taking turns
+  model:
+    path: ${oc.env:SAR_MODEL}
+    use_remove_padding: true
+    enable_gradient_checkpointing: true
+    use_liger: true
+  actor:
+    optim:
+      lr: 1.0e-6
+    ppo_mini_batch_size: 128   # = train_batch_size: one update per step, fully on-policy
+    use_dynamic_bsz: true      # pack micro-batches by token count, not sample count
+    ppo_max_token_len_per_gpu: 32768
+    grad_clip: 0.5
+    use_kl_loss: false
+    entropy_coeff: 0
+    loss_agg_mode: token-mean
+    clip_ratio_low: 0.2
+    clip_ratio_high: 0.2
+    use_torch_compile: false
+    fsdp_config:
+      param_offload: false
+      optimizer_offload: false
+  ref:
+    log_prob_use_dynamic_bsz: true
+    log_prob_max_token_len_per_gpu: 32768
+  rollout:
+    name: vllm
+    mode: async
+    n: 5
+    temperature: 0.6
+    top_p: 0.95
+    tensor_model_parallel_size: 1
+    gpu_memory_utilization: 0.55
+    max_num_seqs: 512
+    enable_prefix_caching: true  # every turn re-sends the long schema prompt
+    log_prob_use_dynamic_bsz: true
+    log_prob_max_token_len_per_gpu: 32768
+    val_kwargs:
+      temperature: 0
+      do_sample: false
+      n: 1
+    multi_turn:
+      enable: true
+      tool_config_path: ${oc.env:SAR_CODE}/configs/tools/sql.yaml
+      format: hermes             # Qwen2.5's native <tool_call> format
+      max_assistant_turns: 6
+      max_user_turns: 5
+      max_parallel_calls: 1
+      max_tool_response_length: 2048
+    agent:
+      default_agent_loop: tool_agent
+      num_workers: 8
+
+reward:
+  num_workers: 8
+  custom_reward_function:
+    path: ${oc.env:SAR_CODE}/src/sar/reward/sql_reward.py
+    name: compute_score
+
+trainer:
+  project_name: sql-agent-rl
+  default_local_dir: ${oc.env:SAR_CKPT_DIR}
+  logger: [console, wandb]
+  n_gpus_per_node: 1
+  nnodes: 1
+  val_before_train: true
+  test_freq: 10
+  save_freq: 10
+  max_actor_ckpt_to_keep: 2
+  resume_mode: auto            # a resubmitted job continues from the latest checkpoint
+  log_val_generations: 8

@@ -1,0 +1,23 @@
+# verl tool config: the agent's one tool. The schema must match
+# sar.data.prompts.TOOL_SCHEMA (tests/test_configs.py checks it), since SFT
+# data, eval and serving render the same tool definition into the prompt.
+tools:
+  - class_name: sar.agent.sql_tool.SqlTool
+    config:
+      type: native
+      timeout_s: 10      # per tool call; the final-answer check allows 30 s
+      max_rows: 1000     # fetched per call
+      display_rows: 30   # shown to the model
+      # server_url: http://host:8090   # run SQL in sar.sql_env.server instead of in-process
+    tool_schema:
+      type: function
+      function:
+        name: execute_sql
+        description: Run one read-only SQLite query against the task's database and return the first rows of the result, or the error message.
+        parameters:
+          type: object
+          properties:
+            sql:
+              type: string
+              description: A single SQLite SELECT statement.
+          required: [sql]
