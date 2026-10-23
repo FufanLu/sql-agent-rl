@@ -19,6 +19,7 @@ def test_grpo_runs_compose_base():
         cfg = yaml.safe_load(path.read_text())
         if path.name == "base.yaml":
             assert cfg["defaults"][0] == "ppo_trainer"
+            assert "hydra" not in cfg  # searchpath is only allowed in the primary (run) config
         else:
             assert "base" in cfg["defaults"], path.name
             assert cfg["hydra"]["searchpath"] == ["pkg://verl.trainer.config"], path.name

@@ -5,10 +5,8 @@
 # Starting point: SkyRL-SQL's recipe (examples/train/text_to_sql/run_skyrl_sql.sh),
 # scaled from 8 GPUs to 1: GRPO, 5 samples per question, up to 6 turns,
 # lr 1e-6, no KL term, grad clip 0.5, temperature 0.6 / top-p 0.95.
-hydra:
-  searchpath:
-    - pkg://verl.trainer.config
-
+# No hydra.searchpath here: Hydra only accepts it in the primary config,
+# i.e. in each run file that composes this one.
 defaults:
   - ppo_trainer
   - _self_
