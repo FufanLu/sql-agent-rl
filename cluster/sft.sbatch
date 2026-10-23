@@ -33,6 +33,7 @@ cd "$CODE"
 llamafactory-cli train "$CFG" \
   model_name_or_path="$MODEL" dataset_dir="$DATA/processed/sft" output_dir="$OUT" run_name="$RUN" "$@" \
   2>&1 | tee "$LOGS/sft_$RUN.log"
+if [ -n "${SFT_TAG:-}" ]; then log "diagnostic run $RUN: not publishing a model"; exit 0; fi
 # The final save is a plain HF directory; publish it next to the base models.
 rm -rf "$MODELS/$RUN"
 cp -r "$OUT" "$MODELS/$RUN.partial"
