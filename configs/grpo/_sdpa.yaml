@@ -1,0 +1,21 @@
+# Settings for training without flash-attn (docs/failures.md #1): PyTorch's
+# sdpa attention and no padding removal. Without padding removal every
+# sequence is padded to the longest one in its micro batch, so token-count
+# batching (use_dynamic_bsz) would pack many padded sequences into one micro
+# batch and run out of memory (docs/failures.md #15); fixed micro batches of
+# 2 instead. A run includes this in its defaults list; drop it once the
+# flash-attn wheel is in the env.
+actor_rollout_ref:
+  model:
+    use_remove_padding: false
+    override_config:
+      attn_implementation: sdpa
+  actor:
+    use_dynamic_bsz: false
+    ppo_micro_batch_size_per_gpu: 2
+  ref:
+    log_prob_use_dynamic_bsz: false
+    log_prob_micro_batch_size_per_gpu: 2
+  rollout:
+    log_prob_use_dynamic_bsz: false
+    log_prob_micro_batch_size_per_gpu: 2

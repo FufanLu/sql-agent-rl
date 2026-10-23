@@ -19,7 +19,7 @@ VERL_CONFIG = Path(spec.submodule_search_locations[0]) / "trainer" / "config" if
 hydra = pytest.importorskip("hydra")
 pytestmark = pytest.mark.skipif(VERL_CONFIG is None or not VERL_CONFIG.is_dir(), reason="verl config files not installed")
 
-RUNS = sorted(p.stem for p in (ROOT / "configs/grpo").glob("*.yaml") if p.stem != "base")
+RUNS = sorted(p.stem for p in (ROOT / "configs/grpo").glob("*.yaml") if p.stem != "base" and not p.stem.startswith("_"))
 
 
 @pytest.fixture()
@@ -47,3 +47,7 @@ def test_run_config_composes(config_dir, run):
     assert c["reward"]["custom_reward_function"]["path"] == "/x/sar_code/src/sar/reward/sql_reward.py"
     assert c["trainer"]["n_gpus_per_node"] == 1
     assert c["data"]["train_files"].startswith("/x/sar_data/")
+    model = c["actor_rollout_ref"]["model"]
+    if "_sdpa" in (config_dir / f"{run}.yaml").read_text():
+        assert model["use_remove_padding"] is False and model["override_config"]["attn_implementation"] == "sdpa"
+        assert c["actor_rollout_ref"]["actor"]["use_dynamic_bsz"] is False

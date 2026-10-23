@@ -6,6 +6,7 @@ hydra:
 
 defaults:
   - base
+  - _sdpa      # until the flash-attn wheel is in the env (docs/failures.md #1)
   - _self_
 
 trainer:

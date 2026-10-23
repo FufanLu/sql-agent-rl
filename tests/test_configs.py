@@ -16,6 +16,8 @@ def test_tool_yaml_matches_prompt_schema():
 
 def test_grpo_runs_compose_base():
     for path in (ROOT / "configs/grpo").glob("*.yaml"):
+        if path.name.startswith("_"):  # partial configs included by runs
+            continue
         cfg = yaml.safe_load(path.read_text())
         if path.name == "base.yaml":
             assert cfg["defaults"][0] == "ppo_trainer"

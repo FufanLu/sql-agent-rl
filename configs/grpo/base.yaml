@@ -104,3 +104,6 @@ trainer:
   max_actor_ckpt_to_keep: 2
   resume_mode: auto            # a resubmitted job continues from the latest checkpoint
   log_val_generations: 8
+  # Every step's trajectories (prompt, response, score) as <step>.jsonl:
+  # the record of what the policy actually wrote, for error analysis.
+  rollout_data_dir: ${oc.env:SAR_CKPT_DIR}/rollouts

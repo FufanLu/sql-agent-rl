@@ -7,6 +7,7 @@ hydra:
 
 defaults:
   - base
+  - _sdpa
   - _self_
 
 data:
@@ -14,25 +15,8 @@ data:
   val_max_samples: 64
 
 actor_rollout_ref:
-  model:
-    # until the flash-attn wheel exists (docs/failures.md #1)
-    use_remove_padding: false
-    override_config:
-      attn_implementation: sdpa
   actor:
     ppo_mini_batch_size: 16
-    # Without padding removal every sequence is padded to 14336 tokens, so
-    # token-count batching (use_dynamic_bsz) packs ~8 of them into one micro
-    # batch and the logits alone take ~70 GB (docs/failures.md #15). Fixed
-    # micro batches of 2 instead.
-    use_dynamic_bsz: false
-    ppo_micro_batch_size_per_gpu: 2
-  ref:
-    log_prob_use_dynamic_bsz: false
-    log_prob_micro_batch_size_per_gpu: 2
-  rollout:
-    log_prob_use_dynamic_bsz: false
-    log_prob_micro_batch_size_per_gpu: 2
 
 trainer:
   experiment_name: sql_smoke
