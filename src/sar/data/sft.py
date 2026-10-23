@@ -49,6 +49,24 @@ def to_sharegpt(messages: list[dict]) -> dict:
     return {"conversations": conv, "system": system, "tools": json.dumps([TOOL_SCHEMA], ensure_ascii=False)}
 
 
+def to_openai(messages: list[dict]) -> list[dict]:
+    """The conversation for verl's MultiTurnSFTDataset: OpenAI-style messages
+    with tool-call arguments as a dict (Qwen's chat template applies tojson to
+    them, so a JSON string would be encoded twice). As in to_sharegpt, the text
+    of a tool-call turn is dropped."""
+    out = []
+    for m in messages:
+        if m["role"] == "assistant" and m.get("tool_calls"):
+            fn = m["tool_calls"][0]["function"]
+            args = fn["arguments"]
+            args = json.loads(args) if isinstance(args, str) else args
+            out.append({"role": "assistant", "content": "",
+                        "tool_calls": [{"type": "function", "function": {"name": fn["name"], "arguments": args}}]})
+        else:
+            out.append({"role": m["role"], "content": m.get("content") or ""})
+    return out
+
+
 # Chat-template control tokens that leaked into a reply as text (the 32B
 # teacher sometimes writes "<|im_start|>" before a tool call).
 _TEMPLATE_TOKENS = ("<|im_start|>", "<|im_end|>", "<|endoftext|>")
@@ -98,6 +116,11 @@ def main() -> None:
     info = {"sql_agent_sft": {"file_name": "sql_agent_sft.json", "formatting": "sharegpt",
                               "columns": {"messages": "conversations", "system": "system", "tools": "tools"}}}
     (args.out / "dataset_info.json").write_text(json.dumps(info, indent=2))
+    # The same examples for verl's SFT trainer (messages + tools columns).
+    import pandas as pd
+
+    pd.DataFrame({"messages": [to_openai(r["messages"]) for r in chosen],
+                  "tools": [[TOOL_SCHEMA] for _ in chosen]}).to_parquet(args.out / "sft_messages.parquet", index=False)
     questions = len({(r["benchmark"], r["index"]) for r in recs})
     solved = len({(r["benchmark"], r["index"]) for r in chosen})
     print(f"{len(recs)} trajectories over {questions} questions; kept {len(rows)} from {solved} questions")

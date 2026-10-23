@@ -52,3 +52,12 @@ def test_select_skips_duplicate_trajectories():
     recs[1]["messages"] = recs[0]["messages"]  # sample 1 repeats sample 0 exactly
     out = select(recs, per_question=2)
     assert [r["sample"] for r in out] == [0, 2]
+
+
+def test_openai_export_keeps_calls_as_dicts():
+    from sar.data.sft import to_openai
+    out = to_openai(MSGS)
+    assert [m["role"] for m in out] == ["system", "user", "assistant", "tool", "assistant"]
+    call = out[2]["tool_calls"][0]["function"]
+    assert call == {"name": "execute_sql", "arguments": {"sql": "SELECT 1"}} and out[2]["content"] == ""
+    assert out[4]["content"] == "<solution>SELECT 1</solution>"
