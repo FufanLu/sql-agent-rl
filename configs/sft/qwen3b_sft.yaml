@@ -25,7 +25,7 @@ mask_history: false
 output_dir: outputs/sft/qwen3b
 logging_steps: 5
 save_strategy: epoch
-plot_loss: true
+plot_loss: false   # needs matplotlib; the loss is in trainer_state.json and W&B
 report_to: wandb
 run_name: qwen3b_sft
 
