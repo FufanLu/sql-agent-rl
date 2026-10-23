@@ -18,6 +18,9 @@ RUN=$(basename "$CFG" .yaml)
 export SAR_USE_FA=1
 gpu_info
 stage_env
+# Package versions LLaMA-Factory is tested with (cluster/build_sft_overlay.sbatch).
+[ -d "$ROOT/envs/sft-$ENV_REV" ] || { log "missing $ROOT/envs/sft-$ENV_REV: run build_sft_overlay.sbatch"; exit 1; }
+export PYTHONPATH="$ROOT/envs/sft-$ENV_REV:$PYTHONPATH"
 MODEL=$(stage_model "$MODEL_NAME")
 OUT=$CKPT/$RUN
 export WANDB_DIR=$OUT WANDB_PROJECT=sql-agent-rl
