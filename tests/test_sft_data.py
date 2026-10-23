@@ -21,8 +21,11 @@ def test_sharegpt_roles_alternate():
 
 
 def rec(index, sample, strict, tools, tokens):
+    # each sample gets its own final answer, so records are distinct conversations
+    msgs = [dict(m) for m in MSGS]
+    msgs[4] = {**msgs[4], "content": f"<solution>SELECT {sample}</solution>"}
     return {"benchmark": "b", "index": index, "sample": sample, "acc_strict": strict, "tool_calls": tools,
-            "completion_tokens": tokens, "messages": MSGS}
+            "completion_tokens": tokens, "messages": msgs}
 
 
 def test_select_keeps_shortest_correct_with_tool_use():
@@ -41,3 +44,11 @@ def test_select_drops_leaked_template_tokens_only_where_text_is_kept():
     a, b = rec(0, 0, 1.0, 1, 10), rec(1, 0, 1.0, 1, 10)
     a["messages"], b["messages"] = in_call_turn, in_answer
     assert [r["index"] for r in select([a, b], per_question=2)] == [0]
+
+
+def test_select_skips_duplicate_trajectories():
+    # two samples with the same conversation count once
+    recs = [rec(0, 0, 1.0, 1, 100), rec(0, 1, 1.0, 1, 100), rec(0, 2, 1.0, 1, 120)]
+    recs[1]["messages"] = recs[0]["messages"]  # sample 1 repeats sample 0 exactly
+    out = select(recs, per_question=2)
+    assert [r["sample"] for r in out] == [0, 2]

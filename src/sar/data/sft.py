@@ -70,7 +70,17 @@ def select(records: list[dict], per_question: int) -> list[dict]:
     out = []
     for rs in by_q.values():
         rs.sort(key=lambda r: (r["completion_tokens"], r["sample"]))
-        out += rs[:per_question]
+        seen: set[str] = set()
+        for r in rs:
+            # Greedy-ish teachers often repeat the same trajectory; a duplicate
+            # would only double that example's weight in SFT.
+            key = json.dumps(r["messages"], sort_keys=True, ensure_ascii=False)
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(r)
+            if len(seen) == per_question:
+                break
     return out
 
 
