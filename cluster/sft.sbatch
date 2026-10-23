@@ -24,6 +24,8 @@ export PYTHONPATH="$ROOT/envs/sft-$ENV_REV:$PYTHONPATH"
 MODEL=$(stage_model "$MODEL_NAME")
 OUT=$CKPT/$RUN
 export WANDB_DIR=$OUT WANDB_PROJECT=sql-agent-rl
+# LLaMA-Factory starts DeepSpeed only through torchrun, even on one GPU.
+export FORCE_TORCHRUN=1 NNODES=1 NPROC_PER_NODE=1
 mkdir -p "$OUT"
 cp "$CODE/VERSION" "$OUT/code_version.txt" 2>/dev/null || true
 cd "$CODE"
