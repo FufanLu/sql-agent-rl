@@ -31,3 +31,13 @@ def test_select_keeps_shortest_correct_with_tool_use():
             rec(1, 0, 1.0, 0, 10)]       # right but never looked at the data
     out = select(recs, per_question=2)
     assert [(r["index"], r["sample"]) for r in out] == [(0, 1), (0, 2)]
+
+
+def test_select_drops_leaked_template_tokens_only_where_text_is_kept():
+    in_call_turn = [dict(m) for m in MSGS]
+    in_call_turn[2] = {**in_call_turn[2], "content": "<|im_start|>"}  # dropped by the export anyway
+    in_answer = [dict(m) for m in MSGS]
+    in_answer[4] = {**in_answer[4], "content": "<|im_start|><solution>SELECT 1</solution>"}
+    a, b = rec(0, 0, 1.0, 1, 10), rec(1, 0, 1.0, 1, 10)
+    a["messages"], b["messages"] = in_call_turn, in_answer
+    assert [r["index"] for r in select([a, b], per_question=2)] == [0]

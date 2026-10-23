@@ -49,10 +49,23 @@ def to_sharegpt(messages: list[dict]) -> dict:
     return {"conversations": conv, "system": system, "tools": json.dumps([TOOL_SCHEMA], ensure_ascii=False)}
 
 
+# Chat-template control tokens that leaked into a reply as text (the 32B
+# teacher sometimes writes "<|im_start|>" before a tool call).
+_TEMPLATE_TOKENS = ("<|im_start|>", "<|im_end|>", "<|endoftext|>")
+
+
+def _clean(messages: list[dict]) -> bool:
+    """No leaked tokens in the assistant text that the export keeps: turns
+    with a tool call keep only the call's arguments (see to_sharegpt)."""
+    kept = [m.get("content") or "" for m in messages if m["role"] == "assistant" and not m.get("tool_calls")]
+    return not any(t in text for text in kept for t in _TEMPLATE_TOKENS)
+
+
 def select(records: list[dict], per_question: int) -> list[dict]:
     by_q: dict[tuple, list[dict]] = defaultdict(list)
     for r in records:
-        if r.get("acc_strict") == 1.0 and r.get("tool_calls", 0) >= 1 and r.get("messages"):
+        if (r.get("acc_strict") == 1.0 and r.get("tool_calls", 0) >= 1 and r.get("messages")
+                and _clean(r["messages"])):
             by_q[(r["benchmark"], r["index"])].append(r)
     out = []
     for rs in by_q.values():

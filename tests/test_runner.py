@@ -104,3 +104,10 @@ def test_lenient_parser_ignores_final_answers():
     from sar.agent.runner import parse_loose_tool_call
     assert parse_loose_tool_call('<solution>SELECT 1</solution> {"name": "execute_sql", "arguments": {"sql": "x"}}') is None
     assert parse_loose_tool_call('{"name": "execute_sql", "arguments": "SELECT 1"}') is None
+
+
+async def test_loose_call_on_last_turn_is_not_counted(db):
+    call = '{"name": "execute_sql", "arguments": {"sql": "SELECT 1"}}'
+    client = ScriptedClient([(call, None, "stop")] * 3)
+    res = await run_agent(client, AgentConfig(model="m", max_tool_calls=2, lenient_tool_calls=True), MSGS, db)
+    assert res.tool_calls == 2 and res.loose_tool_calls == 2 and res.stop_reason == "max_tool_calls"

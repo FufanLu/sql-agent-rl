@@ -106,9 +106,8 @@ async def run_agent(client: AsyncOpenAI, cfg: AgentConfig, messages: list[dict[s
         content = msg.content or ""
         if not calls and cfg.lenient_tool_calls and (loose := parse_loose_tool_call(content)):
             content, arguments = loose
-            calls = [SimpleNamespace(id=f"loose-{res.loose_tool_calls}",
+            calls = [SimpleNamespace(id=f"loose-{res.tool_calls}", loose=True,
                                      function=SimpleNamespace(name="execute_sql", arguments=arguments))]
-            res.loose_tool_calls += 1
         entry: dict[str, Any] = {"role": "assistant", "content": content}
         if calls:
             entry["tool_calls"] = [{"id": c.id, "type": "function",
@@ -128,6 +127,7 @@ async def run_agent(client: AsyncOpenAI, cfg: AgentConfig, messages: list[dict[s
             return res
         call = calls[0]
         res.tool_calls += 1
+        res.loose_tool_calls += int(getattr(call, "loose", False))  # counted only when executed
         try:
             sql = json.loads(call.function.arguments).get("sql", "")
         except (json.JSONDecodeError, AttributeError):
