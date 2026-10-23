@@ -19,7 +19,14 @@ import pandas as pd
 
 from sar.reward.sql_reward import compute_score
 
-QUESTION_RE = re.compile(r"Question:\n(.*)", re.S)
+# The dumped prompt is decoded without special tokens, so it ends with the
+# remains of the assistant header: "...Question:\n<question>\nassistant\n".
+QUESTION_RE = re.compile(r"Question:\n(.*?)\n(?:assistant\n?)?\Z", re.S)
+
+
+def question_of(prompt: str) -> str | None:
+    m = QUESTION_RE.search(prompt)
+    return m.group(1).strip() if m else None
 
 
 def main() -> None:
@@ -40,8 +47,7 @@ def main() -> None:
         agg = {k: 0.0 for k in ("n", "unmatched", "score", "acc", "format_ok", "pred_empty", "gold_empty", "tool_calls",
                                 "multi_turn")}
         for r in recs:
-            m = QUESTION_RE.search(r["input"])
-            info = by_question.get(m.group(1).strip()) if m else None
+            info = by_question.get(question_of(r["input"]) or "")
             agg["n"] += 1
             if info is None:
                 agg["unmatched"] += 1
