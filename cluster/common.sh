@@ -83,6 +83,10 @@ activate_env() {
     CUDA_HOME=$(dirname "$(dirname "$(command -v nvcc)")")
     export CUDA_HOME
   fi
+  # Slurm here sets ROCR_VISIBLE_DEVICES (AMD's variable) next to
+  # CUDA_VISIBLE_DEVICES, and verl's workers refuse to start when both are
+  # set. It means nothing on NVIDIA nodes.
+  unset ROCR_VISIBLE_DEVICES HIP_VISIBLE_DEVICES
   export FLASHINFER_WORKSPACE_BASE=/tmp/sar-flashinfer-$USER
   export VLLM_USE_FLASHINFER_SAMPLER=${VLLM_USE_FLASHINFER_SAMPLER:-0}
   # vllm-sglang-infra saw NCCL segfault while loading the node's network
