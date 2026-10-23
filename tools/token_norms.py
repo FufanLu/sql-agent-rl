@@ -36,4 +36,7 @@ for arg in sys.argv[1:]:
           f"{q[0]:.3f} / {q[1]:.3f} / {q[2]:.3f}")
     for t in TOKENS:
         i = tok.convert_tokens_to_ids(t)
+        if i is None or i == tok.unk_token_id:
+            print(f"   {t:<16} not a single token in this vocabulary")
+            continue
         print(f"   {t:<16} id {i:<7} norm {float(norms[i]):.4f}")
