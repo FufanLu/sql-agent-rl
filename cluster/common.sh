@@ -63,7 +63,7 @@ if [ -n "${SLURM_JOB_ID:-}" ] && [ -z "${SAR_RUN_RECORDED:-}" ]; then
   {
     printf '%s\t%s\t%s\t%s\t%s\t' "$SLURM_JOB_ID" "${SLURM_JOB_NAME:-}" "$(date '+%F %T')" "$(hostname -s)" \
       "$(head -1 "$CODE/VERSION" 2>/dev/null | cut -c1-10)"
-    for v in RUN MODEL_NAME MODEL_DIR TAG FILES SETS EVAL_ARGS ATTN SAR_USE_FA; do
+    for v in RUN MODEL_NAME MODEL_DIR TAG FILES SETS EVAL_ARGS ATTN SAR_USE_FA SFT_TAG; do
       [ -n "${!v:-}" ] && printf '%s=%s ' "$v" "${!v}"
     done
     printf '\n'

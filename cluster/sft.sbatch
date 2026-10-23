@@ -13,8 +13,9 @@
 set -euo pipefail
 source "${SAR_CODE:-/scratch/$USER/sar/code}/cluster/common.sh"
 CFG=${1:?config yaml}
+shift  # the rest are LLaMA-Factory key=value overrides, e.g. enable_liger_kernel=false max_steps=8
 MODEL_NAME=${MODEL_NAME:?}
-RUN=$(basename "$CFG" .yaml)
+RUN=${SFT_TAG:-$(basename "$CFG" .yaml)}  # SFT_TAG names diagnostic runs so they do not overwrite the real one
 export SAR_USE_FA=1
 gpu_info
 stage_env
@@ -30,7 +31,7 @@ mkdir -p "$OUT"
 cp "$CODE/VERSION" "$OUT/code_version.txt" 2>/dev/null || true
 cd "$CODE"
 llamafactory-cli train "$CFG" \
-  model_name_or_path="$MODEL" dataset_dir="$DATA/processed/sft" output_dir="$OUT" \
+  model_name_or_path="$MODEL" dataset_dir="$DATA/processed/sft" output_dir="$OUT" run_name="$RUN" "$@" \
   2>&1 | tee "$LOGS/sft_$RUN.log"
 # The final save is a plain HF directory; publish it next to the base models.
 rm -rf "$MODELS/$RUN"
