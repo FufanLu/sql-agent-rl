@@ -16,6 +16,8 @@ set -euo pipefail
 source "${SAR_CODE:-/scratch/$USER/sar/code}/cluster/common.sh"
 RUN=${RUN:?set RUN to a config name in configs/grpo}
 MODEL_NAME=${MODEL_NAME:?set MODEL_NAME to a directory in $MODELS}
+# Runs whose config does not include _sdpa use flash-attn (padding removal).
+grep -q "_sdpa" "$CODE/configs/grpo/$RUN.yaml" || export SAR_USE_FA=1
 gpu_info
 stage_env
 

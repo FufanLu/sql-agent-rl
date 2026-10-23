@@ -15,6 +15,7 @@ source "${SAR_CODE:-/scratch/$USER/sar/code}/cluster/common.sh"
 CFG=${1:?config yaml}
 MODEL_NAME=${MODEL_NAME:?}
 RUN=$(basename "$CFG" .yaml)
+export SAR_USE_FA=1
 gpu_info
 stage_env
 MODEL=$(stage_model "$MODEL_NAME")

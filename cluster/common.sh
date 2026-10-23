@@ -63,7 +63,7 @@ if [ -n "${SLURM_JOB_ID:-}" ] && [ -z "${SAR_RUN_RECORDED:-}" ]; then
   {
     printf '%s\t%s\t%s\t%s\t%s\t' "$SLURM_JOB_ID" "${SLURM_JOB_NAME:-}" "$(date '+%F %T')" "$(hostname -s)" \
       "$(head -1 "$CODE/VERSION" 2>/dev/null | cut -c1-10)"
-    for v in RUN MODEL_NAME MODEL_DIR TAG FILES SETS EVAL_ARGS ATTN; do
+    for v in RUN MODEL_NAME MODEL_DIR TAG FILES SETS EVAL_ARGS ATTN SAR_USE_FA; do
       [ -n "${!v:-}" ] && printf '%s=%s ' "$v" "${!v}"
     done
     printf '\n'
@@ -98,6 +98,13 @@ activate_env() {
   # into the env at the next rebuild (ENV_REV).
   if [ -d "$ROOT/envs/overlay-$ENV_REV" ]; then
     export PYTHONPATH="$ROOT/envs/overlay-$ENV_REV${PYTHONPATH:+:$PYTHONPATH}"
+  fi
+  # flash-attn has its own directory (cluster/build_flash_attn.sbatch, then
+  # cluster/install_flash_attn.sbatch) and jobs opt in with SAR_USE_FA=1, so a
+  # run started without it keeps the same kernels when a later leg resumes it.
+  if [ "${SAR_USE_FA:-0}" = 1 ]; then
+    [ -d "$ROOT/envs/fa-$ENV_REV" ] || { log "SAR_USE_FA=1 but $ROOT/envs/fa-$ENV_REV is missing"; return 1; }
+    export PYTHONPATH="$ROOT/envs/fa-$ENV_REV${PYTHONPATH:+:$PYTHONPATH}"
   fi
   if module load cuda/12.8.0 >/dev/null 2>&1 && command -v nvcc >/dev/null; then
     CUDA_HOME=$(dirname "$(dirname "$(command -v nvcc)")")
