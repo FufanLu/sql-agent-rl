@@ -16,4 +16,4 @@ data:
 
 trainer:
   experiment_name: qwen3b_mt_alldata
-  total_epochs: 16  # 621 / 128 x 16 = ~78 steps, about the same as qwen3b_mt
+  total_epochs: 15  # 621 / 128 = 4 full steps per epoch x 15 = 60, the same number of steps as qwen3b_mt

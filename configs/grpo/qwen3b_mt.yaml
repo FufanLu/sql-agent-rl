@@ -11,4 +11,4 @@ defaults:
 
 trainer:
   experiment_name: qwen3b_mt
-  total_epochs: 30  # ~342 questions / 128 per step x 30 = ~80 steps (SkyRL-SQL: ~76)
+  total_epochs: 30  # 342 questions / 128 per step = 2 full steps per epoch (verl drops the remainder) x 30 = 60 steps
