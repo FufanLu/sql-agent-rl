@@ -101,3 +101,16 @@ def test_lenient_extraction_is_diagnostic_only():
     assert extract_lenient_sql(text) == "SELECT name FROM singer WHERE country = 'US'"
     # the reward itself still requires <solution>
     assert compute_score("spider", trajectory(text), GOLD, INFO)["score"] == -1.0
+
+
+def test_every_score_is_logged(tmp_path, monkeypatch):
+    import json
+    log_dir = tmp_path / "reward_log"
+    monkeypatch.setenv("SAR_REWARD_LOG_DIR", str(log_dir))
+    info = {**INFO, "split": "train", "index": 7, "max_global_steps": 3}
+    compute_score("spider", trajectory(f"<solution>{GOLD}</solution>"), GOLD, info)
+    compute_score("spider", trajectory("no answer"), GOLD, info)
+    recs = [json.loads(line) for f in log_dir.iterdir() for line in f.read_text().splitlines()]
+    assert [r["score"] for r in recs] == [1.0, -1.0]
+    assert recs[0]["index"] == 7 and recs[0]["policy_step"] == 3 and recs[0]["sql"] == GOLD
+    assert recs[1]["sql"] is None and recs[1]["format_ok"] == 0.0

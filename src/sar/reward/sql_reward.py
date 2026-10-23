@@ -20,8 +20,11 @@ ran, the error kind), which verl logs per step next to the score.
 
 from __future__ import annotations
 
+import json
 import logging
+import os
 import re
+import time
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -112,9 +115,37 @@ def compute_score(
     sql, why = extract_final_sql(solution_str)
     if sql is None:
         out["unfinished"] = float(why == "unfinished")
+        _log(info, out, None)
         return out
     out["format_ok"] = 1.0
     db_path = dbs.resolve(info["db_family"], info["db_id"])
     out.update(score_sql(db_path, sql, ground_truth))
     out["score"] = out["acc"]
+    _log(info, out, sql)
     return out
+
+
+def _log(info: dict[str, Any], out: dict[str, float], sql: str | None) -> None:
+    """Appends this score to $SAR_REWARD_LOG_DIR/rewards_<pid>.jsonl.
+
+    verl 0.9.1 drops the extra reward fields (acc, pred_empty, ...) for
+    training batches before they reach its metrics and rollout dumps, so the
+    reward keeps its own record of every trajectory it scores. One file per
+    process: appends from several processes to one NFS file can interleave.
+    """
+    log_dir = os.environ.get("SAR_REWARD_LOG_DIR")
+    if not log_dir:
+        return
+    try:
+        rec = {"t": round(time.time(), 3), "split": info.get("split"), "index": info.get("index"),
+               "db_id": info.get("db_id"), "policy_step": info.get("max_global_steps"),
+               "num_turns": _num(info.get("num_turns")), **out, "sql": sql}
+        os.makedirs(log_dir, exist_ok=True)
+        with open(os.path.join(log_dir, f"rewards_{os.getpid()}.jsonl"), "a") as f:
+            f.write(json.dumps(rec, default=str) + "\n")
+    except Exception as e:  # never let bookkeeping break training
+        logger.warning("reward log failed: %s", e)
+
+
+def _num(v: Any) -> Any:
+    return v.item() if hasattr(v, "item") else v

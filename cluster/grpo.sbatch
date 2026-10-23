@@ -26,6 +26,7 @@ export SAR_MODEL=$(stage_model "$MODEL_NAME")
 export SAR_DB_ROOT=$(stage_dbs omnisql)/data
 export SAR_DATA=$DATA/processed/sql
 export SAR_CKPT_DIR=$CKPT/$RUN
+export SAR_REWARD_LOG_DIR=$SAR_CKPT_DIR/reward_log  # every scored trajectory (sar.reward.sql_reward._log)
 [ -f "$SAR_DATA/manifest.json" ] || { log "no $SAR_DATA/manifest.json: run cluster/build_data.sbatch"; exit 1; }
 mkdir -p "$SAR_CKPT_DIR"
 cp "$SAR_DATA/manifest.json" "$SAR_CKPT_DIR/data_manifest.json"  # which data this run saw
