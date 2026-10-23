@@ -26,7 +26,10 @@ def main() -> None:
     with torch.no_grad():
         for t in TOKENS:
             tid = tok.convert_tokens_to_ids(t)
-            pieces = tok(t, add_special_tokens=False, split_special_tokens=True).input_ids
+            # Tokenize the spelling as plain text: without its last character
+            # the string no longer matches the added token, then append ">".
+            pieces = (tok(t[:-1], add_special_tokens=False).input_ids
+                      + tok(t[-1], add_special_tokens=False).input_ids)
             assert tid not in pieces and len(pieces) > 1, (t, pieces)
             before = float(emb[tid].float().norm())
             emb[tid] = emb[pieces].float().mean(0).to(emb.dtype)
