@@ -28,9 +28,14 @@ cp "$CODE/VERSION" "$OUT/code_version.txt" 2>/dev/null || true
 
 PORT=$(python -P -c 'import socket; s=socket.socket(); s.bind(("",0)); print(s.getsockname()[1])')
 # Longest eval trajectory: ~6k-token prompt + 6 turns + tool results.
+# --generation-config vllm: otherwise vLLM applies the model's
+# generation_config.json (Qwen2.5-Coder: repetition_penalty 1.05, top_k 20)
+# to every request, while verl's rollout does not; eval and training would
+# decode differently (docs/failures.md #17).
 setsid vllm serve "$MODEL" --served-model-name "$TAG" --port "$PORT" --host 127.0.0.1 \
   --max-model-len 16384 --gpu-memory-utilization 0.85 --enable-prefix-caching \
   --enable-auto-tool-choice --tool-call-parser hermes \
+  --generation-config vllm \
   >"$OUT/vllm.log" 2>&1 &
 VLLM_PID=$!
 trap 'kill -TERM -- -$VLLM_PID 2>/dev/null || true; sleep 5; kill -KILL -- -$VLLM_PID 2>/dev/null || true' EXIT
