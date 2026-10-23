@@ -1,0 +1,31 @@
+# A few steps of the real multi-turn SQL setup at small scale, to check our
+# tool, reward and data in verl before a long run.
+#   RUN=sql_smoke MODEL_NAME=Qwen2.5-Coder-3B-Instruct sbatch --partition=gpu-short --time=02:00:00 cluster/grpo.sbatch
+hydra:
+  searchpath:
+    - pkg://verl.trainer.config
+
+defaults:
+  - base
+  - _self_
+
+data:
+  train_batch_size: 16
+  val_max_samples: 64
+
+actor_rollout_ref:
+  model:
+    # until the flash-attn wheel exists (docs/failures.md #1)
+    use_remove_padding: false
+    override_config:
+      attn_implementation: sdpa
+  actor:
+    ppo_mini_batch_size: 16
+
+trainer:
+  experiment_name: sql_smoke
+  total_training_steps: 3
+  test_freq: 3
+  save_freq: 3
+  log_val_generations: 4
+  rollout_data_dir: ${oc.env:SAR_CKPT_DIR}/rollouts   # dump trajectories to read them
