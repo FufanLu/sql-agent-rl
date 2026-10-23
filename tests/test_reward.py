@@ -86,3 +86,10 @@ def test_result_keys_are_constant():
     a = compute_score("spider", trajectory("no answer"), GOLD, INFO)
     b = compute_score("spider", trajectory(f"<solution>{GOLD}</solution>"), GOLD, INFO)
     assert a.keys() == b.keys()
+
+
+def test_empty_result_shortcut_is_visible():
+    # Gold returns no rows; a query that returns nothing "matches" it.
+    gold = "SELECT name FROM singer WHERE age > 100"
+    r = compute_score("spider", trajectory("<solution>SELECT name FROM singer WHERE 1 = 0</solution>"), gold, INFO)
+    assert r["score"] == 1.0 and r["gold_empty"] == 1.0 and r["pred_empty"] == 1.0

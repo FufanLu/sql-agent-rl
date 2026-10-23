@@ -66,15 +66,21 @@ def _gold_result(db_path: str, gold_sql: str) -> ExecResult:
 def score_sql(db_path: str | Path, pred_sql: str, gold_sql: str) -> dict[str, float]:
     gold = _gold_result(str(db_path), gold_sql)
     pred = execute(db_path, pred_sql, timeout_s=REWARD_TIMEOUT_S, max_rows=REWARD_MAX_ROWS)
+    # pred_empty / gold_empty expose the empty-result shortcut: when the gold
+    # query returns no rows, any query that returns nothing "matches" it
+    # (45% of SkyRL-SQL-653's gold queries do, docs/failures.md #6).
+    out = {"acc": 0.0, "acc_strict": 0.0, "exec_ok": float(pred.ok), "gold_error": 0.0,
+           "pred_empty": float(pred.ok and not pred.rows), "gold_empty": float(gold.ok and not gold.rows)}
     if not gold.ok:
         # A data problem, not the model's: log it and give no signal either way.
         logger.warning("gold SQL failed on %s: %s", db_path, gold.error)
-        return {"acc": 0.0, "acc_strict": 0.0, "exec_ok": float(pred.ok), "gold_error": 1.0}
+        out["gold_error"] = 1.0
+        return out
     if not pred.ok:
-        return {"acc": 0.0, "acc_strict": 0.0, "exec_ok": 0.0, "gold_error": 0.0}
-    acc = rows_match(pred.rows, gold.rows, mode="set")
-    strict = rows_match(pred.rows, gold.rows, mode="strict", ordered=has_top_level_order_by(gold_sql))
-    return {"acc": float(acc), "acc_strict": float(strict), "exec_ok": 1.0, "gold_error": 0.0}
+        return out
+    out["acc"] = float(rows_match(pred.rows, gold.rows, mode="set"))
+    out["acc_strict"] = float(rows_match(pred.rows, gold.rows, mode="strict", ordered=has_top_level_order_by(gold_sql)))
+    return out
 
 
 def compute_score(
@@ -88,7 +94,7 @@ def compute_score(
     info = extra_info or {}
     # Every key must be present in every result: verl stacks them into arrays.
     out = {"score": -1.0, "acc": 0.0, "acc_strict": 0.0, "exec_ok": 0.0, "format_ok": 0.0,
-           "unfinished": 0.0, "gold_error": 0.0}
+           "unfinished": 0.0, "gold_error": 0.0, "pred_empty": 0.0, "gold_empty": 0.0}
     sql, why = extract_final_sql(solution_str)
     if sql is None:
         out["unfinished"] = float(why == "unfinished")

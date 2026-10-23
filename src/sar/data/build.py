@@ -120,21 +120,27 @@ class Report:
     kept: int = 0
     missing_db: int = 0
     gold_failed: int = 0
+    empty_gold: int = 0  # kept, but flagged: see drop_empty
 
 
-def validate(examples: list[Example], db_root: Path, timeout_s: float) -> tuple[list[Example], Report]:
-    rep, kept = Report(), []
+def validate(examples: list[Example], db_root: Path, timeout_s: float) -> tuple[list[Example], set[int], Report]:
+    """Drops examples whose database is missing or whose gold SQL fails, and
+    returns the indices of those whose gold SQL returns no rows."""
+    rep, kept, empty = Report(), [], set()
     for ex in examples:
         path = dbs.resolve(ex.db_family, ex.db_id, db_root)
         if not path.is_file():
             rep.missing_db += 1
             continue
-        if not execute(path, ex.gold_sql, timeout_s=timeout_s, max_rows=1).ok:
+        res = execute(path, ex.gold_sql, timeout_s=timeout_s, max_rows=1)
+        if not res.ok:
             rep.gold_failed += 1
             continue
+        if not res.rows:
+            empty.add(ex.index)
         kept.append(ex)
-    rep.kept = len(kept)
-    return kept, rep
+    rep.kept, rep.empty_gold = len(kept), len(empty)
+    return kept, empty, rep
 
 
 def sha256(path: Path) -> str:
@@ -163,17 +169,26 @@ def main() -> None:
     overlap = [e for e in train if (e.db_id, e.question.strip().lower()) in eval_keys]
     if overlap:
         raise ValueError(f"{len(overlap)} training questions also appear in eval sets, e.g. {overlap[0].question!r}")
-    train, rep = validate(train, db_root, args.gold_timeout)
+    train, empty, rep = validate(train, db_root, args.gold_timeout)
     manifest["reports"]["train"] = rep.__dict__
     random.Random(args.seed).shuffle(train)
-    splits = {"val": train[: args.val_size], "train": train[args.val_size :]}
-    for ex in splits["val"]:
+    val_all, train_all = train[: args.val_size], train[args.val_size :]
+    for ex in val_all:
         ex.split = "val"
+    # A gold query that returns no rows rewards any query that returns
+    # nothing: 45% of SkyRL-SQL-653 (docs/failures.md #6). The main runs
+    # train without them; *_all keep the original set for the ablation.
+    splits = {
+        "train": [e for e in train_all if e.index not in empty],
+        "val": [e for e in val_all if e.index not in empty],
+        "train_all": train_all,
+        "val_all": val_all,
+    }
 
     for name, exs in evals.items():
-        exs, rep = validate(exs, db_root, args.gold_timeout)
+        exs, _, rep = validate(exs, db_root, args.gold_timeout)
         manifest["reports"][name] = rep.__dict__
-        splits[f"eval_{name}"] = exs
+        splits[f"eval_{name}"] = exs  # eval keeps everything; run_eval also reports EX on non-empty golds
 
     # What verl evaluates every few training steps: the held-out training
     # questions plus a fixed sample of Spider dev and BIRD dev. The full eval

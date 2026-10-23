@@ -1,0 +1,18 @@
+# Ablation: the same run on the full SkyRL-SQL-653 training set, including the
+# 45% of questions whose gold query returns no rows (docs/failures.md #6).
+# Watch reward/pred_empty: if the policy learns that empty results pay, it
+# rises here and EX_nonempty_gold falls relative to qwen3b_mt.
+hydra:
+  searchpath:
+    - pkg://verl.trainer.config
+
+defaults:
+  - base
+  - _self_
+
+data:
+  train_files: ${oc.env:SAR_DATA}/train_all.parquet
+
+trainer:
+  experiment_name: qwen3b_mt_alldata
+  total_epochs: 8   # ~same number of steps as qwen3b_mt on 342 questions x 15 epochs

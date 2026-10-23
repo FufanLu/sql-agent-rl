@@ -80,7 +80,7 @@ async def evaluate(args) -> dict:
         if rec["final_sql"]:
             score = await asyncio.to_thread(score_sql, db_path, rec["final_sql"], row["reward_model"]["ground_truth"])
         else:
-            score = {"acc": 0.0, "acc_strict": 0.0, "exec_ok": 0.0, "gold_error": 0.0}
+            score = {"acc": 0.0, "acc_strict": 0.0, "exec_ok": 0.0, "gold_error": 0.0, "pred_empty": 0.0, "gold_empty": 0.0}
         rec.update(score, benchmark=row["data_source"].removeprefix("sql/"), index=int(info["index"]),
                    db_id=info["db_id"], sample=sample)
         fout.write(json.dumps(rec, ensure_ascii=False) + "\n")
@@ -118,6 +118,10 @@ def summarize(recs: list[dict], n: int) -> dict:
             "tool_error_rate": round(sum(r["tool_errors"] for r in rs) / max(1, sum(r["tool_calls"] for r in rs)), 4),
             "avg_completion_tokens": round(sum(r["completion_tokens"] for r in rs) / len(rs), 1),
             "gold_errors": sum(r.get("gold_error", 0) > 0 for r in first),
+            # EX on questions whose gold result is not empty: immune to the empty-result shortcut
+            "EX_nonempty_gold": round(sum(r["acc"] for r in first if not r.get("gold_empty"))
+                                      / max(1, sum(not r.get("gold_empty") for r in first)), 4),
+            "pred_empty_rate": round(sum(r.get("pred_empty", 0) for r in first) / len(first), 4),
             "stop_reasons": dict(Counter(r["stop_reason"] for r in rs)),
         }
         if n > 1:
