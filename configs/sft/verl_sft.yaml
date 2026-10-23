@@ -1,0 +1,52 @@
+# SFT of the 3B student on the teacher's tool-using trajectories with verl's
+# own SFT trainer (verl.trainer.sft_trainer):
+#   MODEL_NAME=Qwen2.5-Coder-3B-Instruct sbatch cluster/sft_verl.sbatch verl_sft
+# It replaced LLaMA-Factory, whose training path produced non-finite
+# gradients on this stack (docs/failures.md #24). Upside: SFT and RL now share
+# the tokenization (apply_chat_template with the tool schema) and the FSDP
+# engine. tools/check_verl_sft_data.py checked every example through the
+# same dataset class (job 11321229: per-turn tokens == whole conversation,
+# max 5991 tokens).
+hydra:
+  searchpath:
+    - pkg://verl.trainer.config
+
+defaults:
+  - sft_trainer_engine
+  - _self_
+
+data:
+  # cluster/sft_verl.sbatch exports SAR_SFT_DATA (data/processed/sft)
+  train_files: ${oc.env:SAR_SFT_DATA}/sft_messages.parquet
+  val_files: null
+  messages_key: messages
+  tools_key: tools
+  max_length: 8192
+  truncation: error
+  # 283 examples / 16 per step x 2 epochs = ~36 optimizer steps, as the LLaMA-Factory run
+  train_batch_size: 16
+  micro_batch_size_per_gpu: 1
+  use_dynamic_bsz: true
+  max_token_len_per_gpu: 16384
+
+model:
+  path: ${oc.env:SAR_MODEL}
+  use_remove_padding: true
+  enable_gradient_checkpointing: true
+
+optim:
+  lr: 1.0e-5
+  lr_warmup_steps_ratio: 0.05
+  lr_scheduler_type: cosine
+  clip_grad: 1.0
+  weight_decay: 0.0
+
+trainer:
+  project_name: sql-agent-rl
+  experiment_name: qwen3b_sft_verl
+  default_local_dir: ${oc.env:SAR_CKPT_DIR}
+  total_epochs: 2
+  logger: [console, wandb]
+  n_gpus_per_node: 1
+  nnodes: 1
+  resume_mode: disable

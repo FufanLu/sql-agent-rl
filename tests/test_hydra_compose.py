@@ -51,3 +51,22 @@ def test_run_config_composes(config_dir, run):
     if "_sdpa" in (config_dir / f"{run}.yaml").read_text():
         assert model["use_remove_padding"] is False and model["override_config"]["attn_implementation"] == "sdpa"
         assert c["actor_rollout_ref"]["actor"]["use_dynamic_bsz"] is False
+
+
+def test_verl_sft_config_composes(tmp_path, monkeypatch):
+    from hydra import compose, initialize_config_dir
+    from omegaconf import OmegaConf
+
+    for k in ("SAR_SFT_DATA", "SAR_MODEL", "SAR_CKPT_DIR"):
+        monkeypatch.setenv(k, f"/x/{k.lower()}")
+    out = tmp_path / "sft"
+    shutil.copytree(ROOT / "configs/sft", out)
+    p = out / "verl_sft.yaml"
+    p.write_text(p.read_text().replace("pkg://verl.trainer.config", f"file://{VERL_CONFIG}"))
+    with initialize_config_dir(config_dir=str(out), version_base=None):
+        cfg = compose(config_name="verl_sft")
+    c = OmegaConf.to_container(cfg, resolve=True)
+    assert c["data"]["train_files"] == "/x/sar_sft_data/sft_messages.parquet"
+    assert c["data"]["tools_key"] == "tools" and c["model"]["path"] == "/x/sar_model"
+    assert c["model"]["use_remove_padding"] is True
+    assert c["optim"]["lr"] == 1.0e-5 and c["trainer"]["total_epochs"] == 2
