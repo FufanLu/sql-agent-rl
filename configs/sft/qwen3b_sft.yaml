@@ -1,0 +1,41 @@
+# LLaMA-Factory full-parameter SFT of the 3B student on the teacher's
+# successful multi-turn trajectories (sar.data.sft).
+#   cluster/sft.sbatch configs/sft/qwen3b_sft.yaml
+# cluster/sft.sbatch overrides model_name_or_path, dataset_dir and output_dir
+# with cluster paths.
+model_name_or_path: Qwen2.5-Coder-3B-Instruct
+trust_remote_code: true
+
+stage: sft
+do_train: true
+finetuning_type: full
+deepspeed: configs/sft/ds_z2.json   # ZeRO-2; on one GPU it changes little, on 8 it shards optimizer states
+
+dataset: sql_agent_sft
+dataset_dir: data/processed/sft
+template: qwen                      # renders identically to the HF chat template (tools/check_sft_template.py)
+cutoff_len: 16384
+overwrite_cache: true
+preprocessing_num_workers: 8
+# Loss only on assistant turns (gpt and function_call); system, user and
+# observation (tool results) are masked, as in RL.
+train_on_prompt: false
+mask_history: false
+
+output_dir: outputs/sft/qwen3b
+logging_steps: 5
+save_strategy: epoch
+plot_loss: true
+report_to: wandb
+run_name: qwen3b_sft
+
+per_device_train_batch_size: 1
+gradient_accumulation_steps: 16
+learning_rate: 1.0e-5
+num_train_epochs: 2
+lr_scheduler_type: cosine
+warmup_ratio: 0.05
+bf16: true
+gradient_checkpointing: true
+flash_attn: auto
+enable_liger_kernel: true

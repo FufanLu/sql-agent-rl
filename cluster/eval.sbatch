@@ -42,7 +42,11 @@ done
 log "vllm ready after ${t}s"
 
 files=()
-for s in $SETS; do files+=("$SAR_DATA/eval_$s.parquet"); done
+if [ -n "${FILES:-}" ]; then
+  for f in $FILES; do files+=("$SAR_DATA/$f"); done  # e.g. FILES=train.parquet for teacher sampling
+else
+  for s in $SETS; do files+=("$SAR_DATA/eval_$s.parquet"); done
+fi
 python -P -m sar.eval.run_eval --base-url "http://127.0.0.1:$PORT/v1" --model "$TAG" \
   --data "${files[@]}" --out "$OUT" ${EVAL_ARGS:-}
 log "results in $OUT"

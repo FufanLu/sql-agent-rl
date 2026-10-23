@@ -124,7 +124,9 @@ stage_dbs() {
     if [ ! -f "$dst/.complete" ]; then
       local t0=$SECONDS
       rm -rf "$dst" "$dst.partial"
-      cp -r "$src" "$dst.partial" && mv "$dst.partial" "$dst"
+      # BIRD's training databases are the bulk of OmniSQL's data and nothing
+      # here trains on BIRD train; leave them on /scratch.
+      rsync -a --exclude 'bird/train/train_databases/' "$src/" "$dst.partial/" && mv "$dst.partial" "$dst"
       touch "$dst/.complete"
       log "staged data $name ($(du -sh "$dst" | cut -f1)) in $((SECONDS - t0))s"
     fi
