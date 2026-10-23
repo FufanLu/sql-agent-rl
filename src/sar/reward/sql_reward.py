@@ -56,6 +56,20 @@ def extract_final_sql(response: str) -> tuple[str | None, str]:
     return sql, ""
 
 
+_SQL_BLOCK_RE = re.compile(r"```(?:sql|sqlite)?\s*(.*?)```", re.S | re.I)
+
+
+def extract_lenient_sql(text: str) -> str | None:
+    """For diagnosis only, never for reward: the final SQL of an answer that
+    ignored the <solution> format, i.e. the last ```sql block. Separates
+    "cannot follow the format" from "cannot write the SQL"."""
+    sql, _ = extract_final_sql(text)
+    if sql:
+        return sql
+    blocks = [b.strip() for b in _SQL_BLOCK_RE.findall(text) if b.strip()]
+    return blocks[-1] if blocks else None
+
+
 @lru_cache(maxsize=8192)
 def _gold_result(db_path: str, gold_sql: str) -> ExecResult:
     # GRPO samples several responses per question, all checked against the

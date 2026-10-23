@@ -31,6 +31,7 @@ class AgentResult:
     messages: list[dict[str, Any]]
     final_sql: str | None
     stop_reason: str  # answered | format | max_tool_calls | length | error
+    final_text: str = ""  # content of the last assistant turn
     tool_calls: int = 0
     completion_tokens: int = 0
     tool_errors: int = 0
@@ -77,6 +78,7 @@ async def run_agent(client: AsyncOpenAI, cfg: AgentConfig, messages: list[dict[s
                                     "function": {"name": c.function.name, "arguments": c.function.arguments}}
                                    for c in calls[:1]]  # one call per turn, as in training (max_parallel_calls=1)
         msgs.append(entry)
+        res.final_text = msg.content or ""
         if choice.finish_reason == "length":
             res.stop_reason = "length"
             return res

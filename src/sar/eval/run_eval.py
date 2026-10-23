@@ -28,7 +28,7 @@ import pandas as pd
 from openai import AsyncOpenAI
 
 from sar.agent.runner import AgentConfig, run_agent
-from sar.reward.sql_reward import score_sql
+from sar.reward.sql_reward import extract_lenient_sql, score_sql
 from sar.sql_env import dbs
 
 
@@ -75,12 +75,20 @@ async def evaluate(args) -> dict:
             else:
                 rec = {"stop_reason": res.stop_reason, "final_sql": res.final_sql, "tool_calls": res.tool_calls,
                        "completion_tokens": res.completion_tokens, "tool_errors": res.tool_errors}
+                if res.stop_reason != "answered":  # keep what it wrote instead, for error analysis
+                    rec["final_text"] = res.final_text[-2000:]
+                rec["lenient_sql"] = extract_lenient_sql(res.final_text) if res.stop_reason in ("answered", "format") else None
                 if args.save_messages:
                     rec["messages"] = res.messages
         if rec["final_sql"]:
             score = await asyncio.to_thread(score_sql, db_path, rec["final_sql"], row["reward_model"]["ground_truth"])
         else:
             score = {"acc": 0.0, "acc_strict": 0.0, "exec_ok": 0.0, "gold_error": 0.0, "pred_empty": 0.0, "gold_empty": 0.0}
+        if rec.get("lenient_sql") and rec["lenient_sql"] != rec["final_sql"]:
+            lenient = await asyncio.to_thread(score_sql, db_path, rec["lenient_sql"], row["reward_model"]["ground_truth"])
+            rec["acc_lenient"] = lenient["acc"]
+        else:
+            rec["acc_lenient"] = score["acc"]
         rec.update(score, benchmark=row["data_source"].removeprefix("sql/"), index=int(info["index"]),
                    db_id=info["db_id"], sample=sample)
         fout.write(json.dumps(rec, ensure_ascii=False) + "\n")
@@ -119,6 +127,8 @@ def summarize(recs: list[dict], n: int) -> dict:
             "questions": len(by_q),
             "EX": round(sum(r["acc"] for r in first) / len(first), 4),
             "EX_strict": round(sum(r["acc_strict"] for r in first) / len(first), 4),
+            # also accepts a final ```sql block without <solution>: SQL ability with the format set aside
+            "EX_lenient": round(sum(r.get("acc_lenient", r["acc"]) for r in first) / len(first), 4),
             "answered": round(sum(r["stop_reason"] == "answered" for r in rs) / len(rs), 4),
             "avg_tool_calls": round(sum(r["tool_calls"] for r in rs) / len(rs), 3),
             "tool_error_rate": round(sum(r["tool_errors"] for r in rs) / max(1, sum(r["tool_calls"] for r in rs)), 4),

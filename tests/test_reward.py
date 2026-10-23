@@ -93,3 +93,11 @@ def test_empty_result_shortcut_is_visible():
     gold = "SELECT name FROM singer WHERE age > 100"
     r = compute_score("spider", trajectory("<solution>SELECT name FROM singer WHERE 1 = 0</solution>"), gold, INFO)
     assert r["score"] == 1.0 and r["gold_empty"] == 1.0 and r["pred_empty"] == 1.0
+
+
+def test_lenient_extraction_is_diagnostic_only():
+    from sar.reward.sql_reward import extract_lenient_sql
+    text = "Here is the query:\n```sql\nSELECT name FROM singer WHERE country = 'US'\n```"
+    assert extract_lenient_sql(text) == "SELECT name FROM singer WHERE country = 'US'"
+    # the reward itself still requires <solution>
+    assert compute_score("spider", trajectory(text), GOLD, INFO)["score"] == -1.0
