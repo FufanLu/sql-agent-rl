@@ -66,3 +66,4 @@ Results are copied from the job's own output files; nothing here is estimated.
 | 11320095 | SFT diagnostic A: 8 steps, `enable_liger_kernel=false` (else as 11319716) | gpu-short | submitted | — | — |
 | 11320090 | SFT diagnostic B: 8 steps, `flash_attn=sdpa` (else as 11319716) | gpu-short | completed | — | **Still 4/8 steps skipped**, grad_norm inf, first logged loss 0.9947 (same as 11319716): flash-attn is not the cause |
 | 11320131 | Provisional full eval of `models/qwen3b_sft` (from the suspect run 11319716) | gpu (A100) | submitted | — | — |
+| 11320279 | SFT diagnostic C: 8 steps, `deepspeed=null` (plain HF Trainer, bf16, liger on) | gpu-short | submitted | — | — |
