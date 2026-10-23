@@ -54,6 +54,22 @@ export WANDB_MODE=${WANDB_MODE:-offline}
 
 log() { echo "[$(date +%H:%M:%S)] $*" >&2; }
 
+# Every job records itself in $ROOT/runs.tsv when it starts: id, name,
+# node, code version and the variables that say what it is running. The
+# outcome comes from sacct (tools/runs_table.py joins the two); results and
+# notes go into docs/runs.md.
+if [ -n "${SLURM_JOB_ID:-}" ] && [ -z "${SAR_RUN_RECORDED:-}" ]; then
+  export SAR_RUN_RECORDED=1
+  {
+    printf '%s\t%s\t%s\t%s\t%s\t' "$SLURM_JOB_ID" "${SLURM_JOB_NAME:-}" "$(date '+%F %T')" "$(hostname -s)" \
+      "$(head -1 "$CODE/VERSION" 2>/dev/null | cut -c1-10)"
+    for v in RUN MODEL_NAME MODEL_DIR TAG FILES SETS EVAL_ARGS ATTN; do
+      [ -n "${!v:-}" ] && printf '%s=%s ' "$v" "${!v}"
+    done
+    printf '\n'
+  } >>"$ROOT/runs.tsv"
+fi
+
 # stage_env unpacks $ENV_TAR to $ENV_DIR unless this node already has it.
 # A lock serializes jobs that land on the same node; unpacking into a scratch
 # directory and renaming makes a half-finished unpack impossible to pick up.
