@@ -10,13 +10,14 @@
 # SFT with verl's SFT trainer, then merges the final FSDP checkpoint into an HF
 # model at $MODELS/<run>, which eval.sbatch and GRPO runs can use.
 #   MODEL_NAME=Qwen2.5-Coder-3B-Instruct sbatch cluster/sft_verl.sbatch verl_sft [hydra overrides...]
-# SFT_TAG names a diagnostic run (own checkpoint dir, no published model).
+# RUN_NAME names the run and the published model; SFT_TAG names a diagnostic
+# run (own checkpoint dir, no published model).
 set -euo pipefail
 source "${SAR_CODE:-/scratch/$USER/sar/code}/cluster/common.sh"
 CFG=${1:?config name in configs/sft}
 shift
 MODEL_NAME=${MODEL_NAME:?}
-RUN=${SFT_TAG:-qwen3b_$CFG}
+RUN=${RUN_NAME:-${SFT_TAG:-qwen3b_$CFG}}  # RUN_NAME: published model name; SFT_TAG: diagnostic run, not published
 export SAR_USE_FA=1  # padding removal needs flash-attn
 gpu_info
 stage_env
