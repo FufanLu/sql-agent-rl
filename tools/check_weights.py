@@ -40,14 +40,21 @@ def main() -> None:
         if n_bad:
             bad.append((k, n_bad, t.numel()))
         if k in b:
-            d = (t - load(b[k])).abs()
-            moved.append((float(d.mean()), k))
+            w = load(b[k])
+            d = (t - w).abs()
+            rel = float((t - w).norm() / (w.norm() + 1e-12))
+            moved.append((float(d.mean()), k, rel, float(d.max())))
     print(f"tensors with non-finite values: {len(bad)}")
     for k, n, total in bad[:10]:
         print(f"  {k}: {n}/{total}")
     moved.sort(reverse=True)
-    print("largest mean |change| vs base:", [(k, f"{m:.2e}") for m, k in moved[:5]])
-    print("smallest mean |change| vs base:", [(k, f"{m:.2e}") for m, k in moved[-3:]])
+    print("largest mean |change| vs base:", [(k, f"{m:.2e}") for m, k, _, _ in moved[:5]])
+    print("smallest mean |change| vs base:", [(k, f"{m:.2e}") for m, k, _, _ in moved[-3:]])
+    # A few entries can change enormously while the mean stays tiny.
+    by_rel = sorted(moved, key=lambda x: -x[2])
+    print("largest relative change ||dW||/||W||:", [(k, f"{r:.2e}", f"max {mx:.2e}") for _, k, r, mx in by_rel[:8]])
+    by_max = sorted(moved, key=lambda x: -x[3])
+    print("largest single-entry change:", [(k, f"{mx:.2e}") for _, k, _, mx in by_max[:8]])
     for name in ("tokenizer_config.json", "generation_config.json", "config.json"):
         fa, fb = ft / name, base / name
         if not fa.exists():
