@@ -16,6 +16,7 @@ dependencies = [
   "httpx",
   "prometheus-client",
   "pyyaml",
+  "openai",
 ]
 
 [project.optional-dependencies]
