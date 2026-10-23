@@ -73,3 +73,34 @@ def test_summarize_uses_first_sample_for_ex():
     recs = [rec(0, 0, 1.0), rec(0, 1, 0.0), rec(1, 0, 0.0), rec(1, 1, 1.0)]
     s = summarize(recs, n=2)["b"]
     assert s["EX"] == 0.5 and s["pass@2"] == 1.0 and s["pass@1"] == 0.5
+
+
+@pytest.mark.parametrize("content", [
+    'Let me check.\n{"name": "execute_sql", "arguments": {"sql": "SELECT DISTINCT country FROM singer"}}',
+    '<tool>\n{"name": "execute_sql", "arguments": {"sql": "SELECT DISTINCT country FROM singer"}}\n</tool>',
+    'Let me check.\n```json\n{"name": "execute_sql", "arguments": {"sql": "SELECT DISTINCT country FROM singer"}}\n```',
+])
+async def test_lenient_parser_recovers_unwrapped_calls(db, content):
+    client = ScriptedClient([
+        (content, None, "stop"),
+        ("<solution>SELECT name FROM singer WHERE country = 'US'</solution>", None, "stop"),
+    ])
+    res = await run_agent(client, AgentConfig(model="m", lenient_tool_calls=True), MSGS, db)
+    assert res.loose_tool_calls == 1 and res.tool_calls == 1 and res.stop_reason == "answered"
+    call_turn = res.messages[2]
+    assert call_turn["tool_calls"][0]["function"]["name"] == "execute_sql"
+    assert json.loads(call_turn["tool_calls"][0]["function"]["arguments"]) == {"sql": "SELECT DISTINCT country FROM singer"}
+    assert "{" not in call_turn["content"] and "<tool>" not in call_turn["content"]  # stored without the raw JSON
+    assert "| US |" in res.messages[3]["content"]
+
+
+async def test_lenient_parser_off_by_default(db):
+    content = '{"name": "execute_sql", "arguments": {"sql": "SELECT 1"}}'
+    res = await run_agent(ScriptedClient([(content, None, "stop")]), AgentConfig(model="m"), MSGS, db)
+    assert res.stop_reason == "format" and res.tool_calls == 0
+
+
+def test_lenient_parser_ignores_final_answers():
+    from sar.agent.runner import parse_loose_tool_call
+    assert parse_loose_tool_call('<solution>SELECT 1</solution> {"name": "execute_sql", "arguments": {"sql": "x"}}') is None
+    assert parse_loose_tool_call('{"name": "execute_sql", "arguments": "SELECT 1"}') is None

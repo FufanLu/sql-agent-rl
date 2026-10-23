@@ -14,8 +14,10 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 from openai import AsyncOpenAI
@@ -36,6 +38,7 @@ class AgentResult:
     completion_tokens: int = 0
     tool_errors: int = 0
     exec_ms: list[float] = field(default_factory=list)
+    loose_tool_calls: int = 0  # calls recovered by the lenient parser (cfg.lenient_tool_calls)
 
 
 @dataclass
@@ -49,6 +52,34 @@ class AgentConfig:
     tool_max_rows: int = 1000
     display_rows: int = 30
     max_tool_response_chars: int = 2048  # = verl multi_turn.max_tool_response_length
+    # Teacher sampling only: also accept the tool-call forms Qwen2.5-Coder
+    # writes instead of <tool_call> (bare JSON, <tool>...</tool>, ```json),
+    # execute them, and store them as proper tool calls, so the SFT data
+    # teaches the student the right format. Never used for reported EX.
+    lenient_tool_calls: bool = False
+
+
+_CALL_START = re.compile(r'\{\s*"name"\s*:\s*"execute_sql"')
+_WRAPPER = re.compile(r"(<tool_call>|<tool>|```(?:json)?)\s*$")
+
+
+def parse_loose_tool_call(content: str) -> tuple[str, str] | None:
+    """(text before the call, arguments as a JSON string) for a reply that
+    calls execute_sql without the <tool_call> wrapper, else None."""
+    if "<solution>" in content:
+        return None  # a final answer, not a call
+    m = _CALL_START.search(content)
+    if not m:
+        return None
+    try:
+        obj, _ = json.JSONDecoder().raw_decode(content, m.start())
+    except json.JSONDecodeError:
+        return None
+    args = obj.get("arguments")
+    if not isinstance(args, dict) or not isinstance(args.get("sql"), str):
+        return None
+    prefix = _WRAPPER.sub("", content[: m.start()]).rstrip()
+    return prefix, json.dumps(args, ensure_ascii=False)
 
 
 def _truncate_middle(text: str, limit: int) -> str:
@@ -72,7 +103,13 @@ async def run_agent(client: AsyncOpenAI, cfg: AgentConfig, messages: list[dict[s
         res.completion_tokens += resp.usage.completion_tokens if resp.usage else 0
         msg = choice.message
         calls = msg.tool_calls or []
-        entry: dict[str, Any] = {"role": "assistant", "content": msg.content or ""}
+        content = msg.content or ""
+        if not calls and cfg.lenient_tool_calls and (loose := parse_loose_tool_call(content)):
+            content, arguments = loose
+            calls = [SimpleNamespace(id=f"loose-{res.loose_tool_calls}",
+                                     function=SimpleNamespace(name="execute_sql", arguments=arguments))]
+            res.loose_tool_calls += 1
+        entry: dict[str, Any] = {"role": "assistant", "content": content}
         if calls:
             entry["tool_calls"] = [{"id": c.id, "type": "function",
                                     "function": {"name": c.function.name, "arguments": c.function.arguments}}

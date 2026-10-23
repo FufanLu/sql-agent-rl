@@ -46,7 +46,8 @@ def _messages(prompt) -> list[dict]:
 async def evaluate(args) -> dict:
     client = AsyncOpenAI(base_url=args.base_url, api_key=args.api_key, timeout=600, max_retries=3)
     cfg = AgentConfig(model=args.model, max_tool_calls=args.max_tool_calls, temperature=args.temperature,
-                      top_p=args.top_p, max_tokens_per_turn=args.max_tokens_per_turn)
+                      top_p=args.top_p, max_tokens_per_turn=args.max_tokens_per_turn,
+                      lenient_tool_calls=args.lenient_tool_calls)
     rows = []
     for path in args.data:
         df = pd.read_parquet(path)
@@ -74,7 +75,8 @@ async def evaluate(args) -> dict:
                        "tool_calls": 0, "completion_tokens": 0, "tool_errors": 0}
             else:
                 rec = {"stop_reason": res.stop_reason, "final_sql": res.final_sql, "tool_calls": res.tool_calls,
-                       "completion_tokens": res.completion_tokens, "tool_errors": res.tool_errors}
+                       "completion_tokens": res.completion_tokens, "tool_errors": res.tool_errors,
+                       "loose_tool_calls": res.loose_tool_calls}
                 if res.stop_reason != "answered":  # keep what it wrote instead, for error analysis
                     rec["final_text"] = res.final_text[-2000:]
                 rec["lenient_sql"] = extract_lenient_sql(res.final_text) if res.stop_reason in ("answered", "format") else None
@@ -106,7 +108,7 @@ async def evaluate(args) -> dict:
         first = next(r["error"] for r in recs if r["stop_reason"] == "error")
         raise SystemExit(f"{errors}/{len(recs)} requests failed (limit {args.max_error_rate:.0%}); first: {first[:500]}")
     summary = summarize(recs, args.n)
-    summary["_meta"] = {"errors": errors, "model": args.model, "base_url": args.base_url, "n": args.n, "temperature": args.temperature,
+    summary["_meta"] = {"errors": errors, "lenient_tool_calls": args.lenient_tool_calls, "model": args.model, "base_url": args.base_url, "n": args.n, "temperature": args.temperature,
                         "max_tool_calls": args.max_tool_calls, "seconds": round(time.time() - t0, 1),
                         "data": [str(p) for p in args.data]}
     (out_dir / "summary.json").write_text(json.dumps(summary, indent=2))
@@ -165,6 +167,8 @@ def main() -> None:
     ap.add_argument("--concurrency", type=int, default=128)
     ap.add_argument("--limit", type=int, default=0, help="first N questions per file (debugging)")
     ap.add_argument("--save-messages", action="store_true")
+    ap.add_argument("--lenient-tool-calls", action="store_true",
+                    help="teacher sampling only: execute unwrapped tool calls and store them properly")
     ap.add_argument("--max-error-rate", type=float, default=0.02, help="fail instead of reporting if more requests error")
     args = ap.parse_args()
     summary = asyncio.run(evaluate(args))
