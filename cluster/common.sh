@@ -44,6 +44,10 @@ export XDG_CACHE_HOME=/tmp/sar-cache-$USER
 export VLLM_CACHE_ROOT=/tmp/sar-vllm-cache-$USER
 export TRITON_CACHE_DIR=/tmp/sar-triton-$USER
 export PYTHONUNBUFFERED=1
+# Compute nodes route HTTP through a site proxy (squid), and Python HTTP
+# clients send even 127.0.0.1 there, which answers "Access Denied". Local
+# services (vLLM, the SQL sandbox, Ray's endpoints) must bypass it.
+export NO_PROXY="127.0.0.1,localhost,::1${NO_PROXY:+,$NO_PROXY}" no_proxy="127.0.0.1,localhost,::1${no_proxy:+,$no_proxy}"
 # W&B cannot reach its server from a compute node: runs log offline into the
 # checkpoint directory, and cluster/wandb_sync.sh uploads them from the login node.
 export WANDB_MODE=${WANDB_MODE:-offline}

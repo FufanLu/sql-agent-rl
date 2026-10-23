@@ -91,8 +91,14 @@ async def evaluate(args) -> dict:
 
     recs = await asyncio.gather(*(one(r, s) for r in rows for s in range(args.n)))
     fout.close()
+    # Endpoint errors are scored 0 so one bad request cannot kill a long run,
+    # but many of them mean the numbers measure the plumbing, not the model.
+    errors = sum(r["stop_reason"] == "error" for r in recs)
+    if errors > args.max_error_rate * len(recs):
+        first = next(r["error"] for r in recs if r["stop_reason"] == "error")
+        raise SystemExit(f"{errors}/{len(recs)} requests failed (limit {args.max_error_rate:.0%}); first: {first[:500]}")
     summary = summarize(recs, args.n)
-    summary["_meta"] = {"model": args.model, "base_url": args.base_url, "n": args.n, "temperature": args.temperature,
+    summary["_meta"] = {"errors": errors, "model": args.model, "base_url": args.base_url, "n": args.n, "temperature": args.temperature,
                         "max_tool_calls": args.max_tool_calls, "seconds": round(time.time() - t0, 1),
                         "data": [str(p) for p in args.data]}
     (out_dir / "summary.json").write_text(json.dumps(summary, indent=2))
@@ -149,6 +155,7 @@ def main() -> None:
     ap.add_argument("--concurrency", type=int, default=128)
     ap.add_argument("--limit", type=int, default=0, help="first N questions per file (debugging)")
     ap.add_argument("--save-messages", action="store_true")
+    ap.add_argument("--max-error-rate", type=float, default=0.02, help="fail instead of reporting if more requests error")
     args = ap.parse_args()
     summary = asyncio.run(evaluate(args))
     print(json.dumps(summary, indent=2))
