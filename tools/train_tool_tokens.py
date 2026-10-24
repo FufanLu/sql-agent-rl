@@ -41,7 +41,8 @@ def p_tool_call(model, tok, rows, tid) -> float:
             msgs = to_messages(row)
             prompt = tok.apply_chat_template(msgs[:2], tools=[TOOL_SCHEMA], tokenize=True, add_generation_prompt=True,
                                              return_dict=False)
-            logits = model(torch.tensor([prompt], device="cuda")).logits[0, -1].float()
+            with torch.autocast("cuda", dtype=torch.bfloat16):
+                logits = model(torch.tensor([prompt], device="cuda")).logits[0, -1].float()
             ps.append(float(torch.softmax(logits, -1)[tid]))
     return sum(ps) / len(ps)
 
@@ -75,6 +76,12 @@ def main() -> None:
         rows = json.load(f)
     heldout, train = rows[: args.heldout], rows[args.heldout:]
     model.eval()  # no dropout in Qwen2 anyway; keeps generation-style numerics
+    # The gradient reaches the input embedding only through all 36 layers, so
+    # the forward pass keeps every activation; in fp32, sdpa also falls back to
+    # its math kernel and stores full attention matrices (OOM on 140 GB,
+    # docs/failures.md #37). Checkpoint the layers and run the forward pass in
+    # bf16 autocast; the trainable rows stay fp32.
+    model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
     print(f"p(<tool_call>) at answer start, held-out {len(heldout)}: before {p_tool_call(model, tok, heldout, ids[0]):.3f}",
           flush=True)
     step = 0
@@ -82,7 +89,8 @@ def main() -> None:
         total, n = 0.0, 0
         for i, row in enumerate(train):
             x, y = encode(tok, to_messages(row))
-            loss = model(input_ids=torch.tensor([x], device="cuda"), labels=torch.tensor([y], device="cuda")).loss
+            with torch.autocast("cuda", dtype=torch.bfloat16):
+                loss = model(input_ids=torch.tensor([x], device="cuda"), labels=torch.tensor([y], device="cuda")).loss
             (loss / args.accum).backward()
             total, n = total + float(loss), n + 1
             if (i + 1) % args.accum == 0 or i + 1 == len(train):
