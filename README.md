@@ -8,13 +8,13 @@ for up to 5 tool calls. Then it answers with one final query. Training rewards
 only one thing: whether the final query returns the same rows as the gold
 query.
 
-Pipeline: data → SFT (LLaMA-Factory) → DPO baseline (TRL) → multi-turn GRPO
-(verl: Ray + FSDP + vLLM) → evaluation → quantization → serving (vLLM behind
-the [vllm-sglang-infra](https://github.com/FufanLu/vllm-sglang-infra) gateway,
-plus an MCP server).
+Pipeline: data → SFT (verl's SFT trainer) → multi-turn GRPO (verl: Ray +
+FSDP + vLLM) → evaluation → serving (vLLM behind the
+[vllm-sglang-infra](https://github.com/FufanLu/vllm-sglang-infra) gateway,
+plus an MCP server). Planned, not done yet: DPO baseline (TRL), quantization.
 
-> Status: under construction. Numbers are added only once they have been
-> measured. Failures are logged in [docs/failures.md](docs/failures.md).
+> Numbers are added only once they have been measured. Every job is in
+> [docs/runs.md](docs/runs.md), every failure in [docs/failures.md](docs/failures.md).
 
 ## Architecture
 
@@ -42,6 +42,49 @@ plus an MCP server).
 - Train: [SkyRL-SQL-653](https://huggingface.co/datasets/NovaSky-AI/SkyRL-SQL-653-data) (540 SynSQL + 113 Spider train questions).
 - Eval: Spider dev/test, Spider-DK, Spider-Syn, Spider-Realistic, and BIRD dev (via [SkyRL-SQL-eval](https://huggingface.co/datasets/NovaSky-AI/SkyRL-SQL-eval)), on the databases from [OmniSQL](https://huggingface.co/datasets/seeklhy/OmniSQL-datasets).
 - Metric: execution accuracy (EX). The training reward uses set comparison, as SkyRL-SQL and OmniSQL do. A strict variant is also reported: duplicates count, and order counts when the gold query sorts.
+
+## Results
+
+Qwen2.5-Coder-3B-Instruct, one H200 per run, the same 342 training questions
+and GRPO settings for every RL run (batch 128 × 5 samples, 60 steps, lr 1e-6,
+no KL). Greedy decoding, execution accuracy on all 6,791 eval questions.
+
+| Model | Spider dev | Spider test | Spider-DK | Spider-Syn | Spider-Realistic | BIRD dev | All | Tool calls / question |
+|---|---|---|---|---|---|---|---|---|
+| Base | 0.077 | 0.121 | 0.028 | 0.082 | 0.089 | 0.059 | 0.085 | 0 |
+| RL only | 0.743 | 0.765 | **0.675** | **0.633** | 0.703 | 0.351 | 0.636 | 0 |
+| SFT, `<tool_call>` embedding initialized | 0.683 | 0.714 | 0.563 | 0.579 | 0.636 | 0.308 | 0.579 | 1.35–1.79 |
+| ↳ then RL | 0.741 | 0.758 | 0.621 | 0.600 | 0.701 | 0.354 | 0.625 | 0 |
+| SFT, `<tool_call>` embedding trained first | 0.708 | 0.745 | 0.609 | 0.582 | 0.691 | 0.341 | 0.609 | 1.39–2.13 |
+| ↳ then RL | **0.758** | **0.780** | 0.639 | 0.624 | **0.742** | **0.379** | **0.648** | 1.17–1.53 |
+
+What the rows show:
+
+- **RL alone** learns to answer in one turn and never calls the tool. The base
+  model scores low mostly because it rarely produces the answer format (6–17%
+  of questions answered).
+- **Qwen2.5-Coder's `<tool_call>` token is untrained** (its embedding is all
+  zeros in the 7B and 32B models; a small placeholder vector in the tied 3B
+  model), so SFT cannot teach the model to emit it. Initializing the embedding
+  from the mean of its spelling's pieces makes greedy decoding work, but under
+  sampling 55% of responses spell the token out as text. RL from that model then
+  **collapses to single-turn**: a real tool call carries more ways to fail than
+  answering directly, and by step 25 every sample answers directly.
+- **Training the two tool-call embedding rows alone first** (lr 1e-3, all
+  other weights frozen; p(`<tool_call>`) at the answer start 0.000 → 0.883),
+  then SFT, removes the defect: 0 of 640 samples break the token, and RL stays
+  multi-turn (verl `num_turns` 4.7 in validation at step 60; 2.0 means no tool call). It is the best
+  model overall and on BIRD, with fewer wasted calls than its SFT start
+  (questions with 3+ calls 1360 → 265). It is behind RL-only on Spider-DK and
+  Spider-Syn.
+
+Deployment check (`cluster/deploy_demo.sbatch`, Spider dev + BIRD dev, 2,567
+questions): through the gateway, a request without an API key gets 401; 6,187
+model requests produced exactly 6,187 usage records for the tenant; final SQL
+matched a direct-to-vLLM run on 90.4% of questions, while two direct runs
+match on 88.4% (vLLM's run-to-run nondeterminism under greedy decoding), so the
+gateway changes nothing; an MCP client answered 5/5 Spider dev questions
+through the MCP server and the gateway.
 
 ## Environment
 
