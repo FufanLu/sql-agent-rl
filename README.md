@@ -78,6 +78,16 @@ What the rows show:
   (questions with 3+ calls 1360 → 265). It is behind RL-only on Spider-DK and
   Spider-Syn.
 
+Ablation, keeping the empty-gold questions (`qwen3b_mt_alldata`): 45% of the
+public training set has gold SQL that returns no rows on today's databases, so
+any empty result scores there. RL-only on all 621 questions instead of the 342
+non-empty ones, everything else the same. On those training questions the
+share of empty answers rose from about 0.5 to 0.85 (formatted samples), but it
+did not spread: on held-out questions whose gold is not empty, both models
+answer empty 3.3% of the time (57 vs 56 questions, sign test p = 1.0), and EX
+is level (0.641 vs 0.636, p = 0.15). At this scale the filter is not needed to
+protect accuracy (`tools/empty_compare.py`, `docs/runs.md`).
+
 Deployment check (`cluster/deploy_demo.sbatch`, Spider dev + BIRD dev, 2,567
 questions): through the gateway, a request without an API key gets 401; 6,187
 model requests produced exactly 6,187 usage records for the tenant; final SQL
