@@ -9,7 +9,7 @@ set -euo pipefail
 RUN=${1:?run} MODEL_NAME=${2:?model} LEGS=${3:?legs}
 shift 3
 cd "$(dirname "$0")/.."
-export SBATCH_ACCOUNT=${SBATCH_ACCOUNT:-info6205.202610}
+# sbatch takes the account from $SBATCH_ACCOUNT when the cluster needs one.
 dep=${AFTER:-}
 for ((i = 1; i <= LEGS; i++)); do
   id=$(RUN=$RUN MODEL_NAME=$MODEL_NAME sbatch --parsable --job-name="sar-$RUN" \
