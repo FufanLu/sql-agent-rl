@@ -41,14 +41,15 @@ def main() -> None:
     requests = sum(sum(m["role"] == "assistant" for m in r.get("messages", [])) for r in via.values())
     with open(usage_path) as f:
         recs = [json.loads(line) for line in f]
-    ttft = [r["ttft_ms"] for r in recs if r["status"] == "200"]  # the upstream HTTP code; errors have names
+    # TTFT is measured on streamed responses only; non-streamed records carry 0.
+    ttft = [r["ttft_ms"] for r in recs if r["status"] == "200" and r["ttft_ms"] > 0]  # status: upstream HTTP code
     dur = [r["duration_ms"] for r in recs if r["status"] == "200"]
     out["metering"] = {
         "model_requests_in_trajectories": requests, "usage_records": len(recs),
         "status": dict(Counter(r["status"] for r in recs)), "tenants": dict(Counter(r["tenant"] for r in recs)),
         "prompt_tokens": sum(r["prompt_tokens"] for r in recs), "cached_tokens": sum(r["cached_tokens"] for r in recs),
         "completion_tokens": sum(r["completion_tokens"] for r in recs),
-        "ttft_ms_p50_p99": [round(pct(ttft, 50), 1), round(pct(ttft, 99), 1)],
+        "ttft_ms_p50_p99": [round(pct(ttft, 50), 1), round(pct(ttft, 99), 1)] if ttft else "n/a (not streamed)",
         "duration_ms_p50_p99": [round(pct(dur, 50), 1), round(pct(dur, 99), 1)],
         "retries": sum(r["retries"] for r in recs),
     }
