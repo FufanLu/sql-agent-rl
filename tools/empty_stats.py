@@ -6,6 +6,9 @@ line per scored trajectory):
               whether the gold is empty (there it scores) or not (there it
               is always wrong: a sign of over-strict filters)
   acc         accuracy on empty-gold and on non-empty-gold samples
+  fmt, pe|fmt share of samples with a final SQL, and pred_empty among those:
+              early on most samples fail the format and so cannot be empty,
+              which makes plain pred_empty rise with the format alone
 The reward computes gold_empty only for samples with a final SQL (format
 failures carry 0), so questions are classified by their gold result as seen
 in any formatted sample of that question; never-formatted questions count as
@@ -47,9 +50,14 @@ def main() -> None:
 
     steps = sorted(by_step)
     unknown = len({r["index"] for rows in by_step.values() for r in rows} - gold_empty_q.keys())
-    print(f"questions: {len(gold_empty_q)} classified ({sum(gold_empty_q.values())} with empty gold), {unknown} never formatted")
+    print(
+        f"questions: {len(gold_empty_q)} classified ({sum(gold_empty_q.values())} with empty gold), {unknown} never formatted"
+    )
     print("policy_step k = the k+1-th training step (verl counts from 1)")
-    print("step     n  score  gold_empty* pred_empty | empty gold: n  pred_empty   acc | non-empty gold: n  pred_empty   acc")
+    print(
+        "step     n  score  gold_empty* pred_empty | empty gold: n  pred_empty   acc   fmt pe|fmt |"
+        " non-empty gold: n  pred_empty   acc   fmt pe|fmt"
+    )
     for s in steps:
         if s not in (steps[0], steps[-1]) and s % args.every:
             continue
@@ -57,9 +65,13 @@ def main() -> None:
         eg = [r for r in rows if gold_empty_q.get(r["index"]) is True]
         ng = [r for r in rows if gold_empty_q.get(r["index"]) is False]
         score = sum(r["score"] for r in rows) / len(rows)
-        print(f"{s:4d} {len(rows):5d} {score:6.3f}  {share(rows, 'gold_empty'):>10}  {share(rows, 'pred_empty'):>10} |"
-              f" {len(eg):14d}  {share(eg, 'pred_empty'):>10} {share(eg, 'acc'):>5} |"
-              f" {len(ng):17d}  {share(ng, 'pred_empty'):>10} {share(ng, 'acc'):>5}")
+        egf = [r for r in eg if r["format_ok"]]
+        ngf = [r for r in ng if r["format_ok"]]
+        print(
+            f"{s:4d} {len(rows):5d} {score:6.3f}  {share(rows, 'gold_empty'):>10}  {share(rows, 'pred_empty'):>10} |"
+            f" {len(eg):14d}  {share(eg, 'pred_empty'):>10} {share(eg, 'acc'):>5} {share(eg, 'format_ok'):>5} {share(egf, 'pred_empty'):>6} |"
+            f" {len(ng):17d}  {share(ng, 'pred_empty'):>10} {share(ng, 'acc'):>5} {share(ng, 'format_ok'):>5} {share(ngf, 'pred_empty'):>6}"
+        )
     print("* gold_empty column: the per-sample flag, 0 for format failures")
 
 

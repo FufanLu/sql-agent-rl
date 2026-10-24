@@ -7,7 +7,8 @@ Per benchmark, first sample of each question:
                 result: always wrong, the shortcut showing where it does not pay
   empty_eg      share of empty-gold questions answered with an empty result
 and, paired over the non-empty-gold questions, how many only A or only B
-answered empty, with an exact two-sided sign test on those discordant pairs.
+answered empty, with an exact two-sided sign test on those discordant pairs;
+the last line does the same for correctness over all questions.
 A question counts as empty-gold if either run saw an empty gold result (the
 gold flag is 0 when a sample has no final SQL).
     python3 tools/empty_compare.py <results dir A> <results dir B>
@@ -69,6 +70,9 @@ def main() -> None:
             f" {share(a, eg, 'pred_empty'):>10} {share(b, eg, 'pred_empty'):>10} |"
             f" {only_a:6d} {only_b:7d}  {sign_test(only_a, only_b):.3f}"
         )
+    right_a = sum(a[k]["acc"] > b[k]["acc"] for k in keys)
+    right_b = sum(b[k]["acc"] > a[k]["acc"] for k in keys)
+    print(f"correct in only A: {right_a}, only B: {right_b}, sign test p = {sign_test(right_a, right_b):.3f}")
 
 
 if __name__ == "__main__":
