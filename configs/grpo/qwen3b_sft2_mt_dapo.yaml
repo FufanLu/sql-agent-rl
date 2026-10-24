@@ -1,0 +1,26 @@
+# DAPO dynamic sampling on top of the best run (qwen3b_sft2_mt): same start,
+# data, hyperparameters and 60 update steps; only the batch differs. Groups
+# whose 5 samples all get the same score have zero GRPO advantage and update
+# nothing; in qwen3b_sft2_mt they were 58% of the batch at step 1 and 83% at
+# step 60 (docs/runs.md). verl's v1 trainer drops such groups and generates
+# replacements until 128 groups with mixed scores are ready.
+# Clip-higher and overlong shaping stay off, so dynamic sampling is the only
+# DAPO change (token-mean loss is already on in base.yaml).
+#   cluster/submit_grpo.sh qwen3b_sft2_mt_dapo qwen3b_verl_sft_tooltrained 2
+hydra:
+  searchpath:
+    - pkg://verl.trainer.config
+
+defaults:
+  - base
+  - _self_
+
+algorithm:
+  filter_groups:
+    enable: true
+    metric: reward               # the -1/0/1 score itself (rm_scores)
+    max_inflight_gen_batches: 1  # at most 128 prompts generating at once, as without filtering
+
+trainer:
+  experiment_name: qwen3b_sft2_mt_dapo
+  total_epochs: 30  # sets the step count: 342 / 128 = 2 steps per epoch x 30 = 60 steps

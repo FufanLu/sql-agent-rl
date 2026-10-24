@@ -52,6 +52,10 @@ def test_run_config_composes(config_dir, run):
     if "_sdpa" in yaml.safe_load((config_dir / f"{run}.yaml").read_text())["defaults"]:
         assert model["use_remove_padding"] is False and model["override_config"]["attn_implementation"] == "sdpa"
         assert c["actor_rollout_ref"]["actor"]["use_dynamic_bsz"] is False
+    fg = c["algorithm"]["filter_groups"]
+    assert fg["enable"] is run.endswith("_dapo")
+    if fg["enable"]:
+        assert fg["metric"] == "reward"
 
 
 def test_verl_sft_config_composes(tmp_path, monkeypatch):
