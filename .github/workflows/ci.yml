@@ -14,7 +14,7 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           python-version: ${{ matrix.python }}
-      - run: uv venv .venv && uv pip install --python .venv/bin/python -e ".[dev]"
+      - run: uv venv .venv && uv pip install --python .venv/bin/python -e ".[dev,serve]"
       # verl's config files, for tests/test_hydra_compose.py (no torch/ray)
       - run: uv pip install --python .venv/bin/python --no-deps verl==0.9.1 && uv pip install --python .venv/bin/python hydra-core "antlr4-python3-runtime==4.9.3"
       - run: make check

@@ -19,7 +19,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer  # mcp 2.x; FastMCP in 1.x
 from openai import AsyncOpenAI
 
 from sar.agent.runner import AgentConfig, run_agent
@@ -28,7 +28,7 @@ from sar.sql_env.executor import execute
 from sar.sql_env.render import render
 from sar.sql_env.schema import describe
 
-mcp = FastMCP("sql-agent")
+mcp = MCPServer("sql-agent")
 ROOT = Path(os.environ.get("SAR_DATABASES", "."))
 
 

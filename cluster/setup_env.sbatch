@@ -45,7 +45,7 @@ log "installing verl $VERL_VERSION and training deps"
   "trl==0.27.0" "peft" "accelerate" "deepspeed" \
   "wandb" "tensorboard" "hydra-core" \
   "fastapi" "uvicorn" "httpx" "pydantic>=2" "sqlglot" "pandas" "pyarrow" \
-  "lm-eval" "mcp"
+  "lm-eval" "mcp>=2,<3"
 
 # 3. LLaMA-Factory for SFT. --no-deps: its own pins would move torch and
 #    transformers; what it needs beyond them is listed here.

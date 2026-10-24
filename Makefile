@@ -3,7 +3,7 @@ PY ?= .venv/bin/python
 .PHONY: dev test lint typecheck check push serve-sql
 
 dev:            ## local CPU env for tests and the SQL service
-	python3 -m venv .venv && .venv/bin/pip install -q uv && .venv/bin/uv pip install --python .venv/bin/python -e ".[dev]"
+	python3 -m venv .venv && .venv/bin/pip install -q uv && .venv/bin/uv pip install --python .venv/bin/python -e ".[dev,serve]"
 	.venv/bin/uv pip install --python .venv/bin/python --no-deps verl==0.9.1
 	.venv/bin/uv pip install --python .venv/bin/python hydra-core "antlr4-python3-runtime==4.9.3"
 
