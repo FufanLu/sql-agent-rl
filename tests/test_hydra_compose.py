@@ -48,7 +48,8 @@ def test_run_config_composes(config_dir, run):
     assert c["trainer"]["n_gpus_per_node"] == 1
     assert c["data"]["train_files"].startswith("/x/sar_data/")
     model = c["actor_rollout_ref"]["model"]
-    if "_sdpa" in (config_dir / f"{run}.yaml").read_text():
+    import yaml
+    if "_sdpa" in yaml.safe_load((config_dir / f"{run}.yaml").read_text())["defaults"]:
         assert model["use_remove_padding"] is False and model["override_config"]["attn_implementation"] == "sdpa"
         assert c["actor_rollout_ref"]["actor"]["use_dynamic_bsz"] is False
 
@@ -70,3 +71,18 @@ def test_verl_sft_config_composes(tmp_path, monkeypatch):
     assert c["data"]["tools_key"] == "tools" and c["model"]["path"] == "/x/sar_model"
     assert c["model"]["use_remove_padding"] is True
     assert c["optim"]["lr"] == 1.0e-5 and c["trainer"]["total_epochs"] == 2
+
+
+def test_flash_attn_switch_reads_the_defaults_list(tmp_path):
+    """cluster/grpo.sbatch turns flash-attn on unless the run's defaults list
+    includes _sdpa; a comment mentioning _sdpa must not count."""
+    import re
+    import subprocess
+
+    line = next(x for x in (ROOT / "cluster/grpo.sbatch").read_text().splitlines() if "SAR_USE_FA=1" in x)
+    pattern = re.search(r"grep -qE '([^']+)'", line).group(1)
+    for run in RUNS:
+        cfg = ROOT / "configs/grpo" / f"{run}.yaml"
+        uses_sdpa = "_sdpa" in __import__("yaml").safe_load(cfg.read_text())["defaults"]
+        found = subprocess.run(["grep", "-qE", pattern, str(cfg)]).returncode == 0
+        assert found == uses_sdpa, run
