@@ -1,0 +1,19 @@
+# SFT -> RL, second attempt: GRPO from the SFT model built on trained
+# tool-call embeddings (stage 1 tools/train_tool_tokens.py, stage 2 verl SFT).
+# qwen3b_sft_mt started from an SFT model whose <tool_call> embedding was only
+# initialized from its spelling; under sampling 55% of responses spelled the
+# token out in pieces, tool use became the riskier strategy and the policy
+# collapsed to single-turn by step 25 (docs/runs.md, 11337674).
+# Same data and hyperparameters as qwen3b_mt and qwen3b_sft_mt, 60 steps.
+#   cluster/submit_grpo.sh qwen3b_sft2_mt qwen3b_verl_sft_tooltrained 2
+hydra:
+  searchpath:
+    - pkg://verl.trainer.config
+
+defaults:
+  - base
+  - _self_
+
+trainer:
+  experiment_name: qwen3b_sft2_mt
+  total_epochs: 30  # 342 / 128 = 2 full steps per epoch x 30 = 60 steps
