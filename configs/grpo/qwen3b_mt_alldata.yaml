@@ -8,7 +8,7 @@ hydra:
 
 defaults:
   - base
-  - _sdpa      # until the flash-attn wheel is in the env (docs/failures.md #1)
+  - _sdpa      # kept although flash-attn now works: qwen3b_mt ran with it, so the data is the only difference
   - _self_
 
 data:
