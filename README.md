@@ -47,7 +47,7 @@ plus an MCP server). Planned, not done yet: DPO baseline (TRL), quantization.
 
 Qwen2.5-Coder-3B-Instruct, one H200 per run, the same 342 training questions
 and GRPO settings for every RL run (batch 128 × 5 samples, 60 steps, lr 1e-6,
-no KL). Greedy decoding, execution accuracy on all 6,791 eval questions.
+no KL; the DAPO row adds one switch, see below). Greedy decoding, execution accuracy on all 6,791 eval questions.
 
 | Model | Spider dev | Spider test | Spider-DK | Spider-Syn | Spider-Realistic | BIRD dev | All | Tool calls / question |
 |---|---|---|---|---|---|---|---|---|
@@ -56,7 +56,8 @@ no KL). Greedy decoding, execution accuracy on all 6,791 eval questions.
 | SFT, `<tool_call>` embedding initialized | 0.683 | 0.714 | 0.563 | 0.579 | 0.636 | 0.308 | 0.579 | 1.35–1.79 |
 | ↳ then RL | 0.741 | 0.758 | 0.621 | 0.600 | 0.701 | 0.354 | 0.625 | 0 |
 | SFT, `<tool_call>` embedding trained first | 0.708 | 0.745 | 0.609 | 0.582 | 0.691 | 0.341 | 0.609 | 1.39–2.13 |
-| ↳ then RL | **0.758** | **0.780** | 0.639 | 0.624 | **0.742** | **0.379** | **0.648** | 1.17–1.53 |
+| ↳ then RL | 0.758 | 0.780 | 0.639 | 0.624 | **0.742** | 0.379 | 0.648 | 1.17–1.53 |
+| ↳ then RL, DAPO dynamic sampling | **0.783** | **0.783** | 0.665 | **0.636** | 0.728 | **0.381** | **0.657** | 1.22–1.81 |
 
 What the rows show:
 
@@ -73,8 +74,8 @@ What the rows show:
 - **Training the two tool-call embedding rows alone first** (lr 1e-3, all
   other weights frozen; p(`<tool_call>`) at the answer start 0.000 → 0.883),
   then SFT, removes the defect: 0 of 640 samples break the token, and RL stays
-  multi-turn (verl `num_turns` 4.7 in validation at step 60; 2.0 means no tool call). It is the best
-  model overall and on BIRD, with fewer wasted calls than its SFT start
+  multi-turn (verl `num_turns` 4.7 in validation at step 60; 2.0 means no tool call). It is the
+  best model before the DAPO ablation below, overall and on BIRD, with fewer wasted calls than its SFT start
   (questions with 3+ calls 1360 → 265). It is behind RL-only on Spider-DK and
   Spider-Syn.
 
@@ -87,6 +88,24 @@ did not spread: on held-out questions whose gold is not empty, both models
 answer empty 3.3% of the time (57 vs 56 questions, sign test p = 1.0), and EX
 is level (0.641 vs 0.636, p = 0.15). At this scale the filter is not needed to
 protect accuracy (`tools/empty_compare.py`, `docs/runs.md`).
+
+Ablation, DAPO dynamic sampling (`qwen3b_sft2_mt_dapo`): in the best run, a
+group whose 5 samples all score the same has zero advantage and updates
+nothing; such groups were 58% of the batch at step 1 and 83% at step 60. verl's
+group filter (`algorithm.filter_groups`, the only DAPO piece switched on) drops
+them and samples more prompts until 128 groups with signal are ready. Same
+start, data and 60 updates. Paired over all 6,791 questions, it is right on 256
+questions the unfiltered run gets wrong and wrong on 200 it gets right (sign
+test p = 0.01; two evals of one model differ by 25 vs 17), EX 0.657 vs 0.648.
+The largest gains are on Spider dev (+2.5, p = 0.003) and Spider-DK (+2.6);
+Spider-Realistic is lower (−1.4, not significant). The gain sits on questions
+where both runs made the same number of tool calls (144 vs 89), not on extra
+calls. The cost grows as the policy sharpens: the share of groups with signal
+fell from 39% to 11%, so the last steps sampled 1,401 prompts (each training
+question 3–5 times) to train on 128, and the run took 35% longer. One run per
+arm, so the spread between seeds is not measured; and the extra sampling and a
+larger effective step (the token-mean denominator holds only groups with
+signal) are not separated from the cleaner signal (`tools/paired_compare.py`).
 
 Deployment check (`cluster/deploy_demo.sbatch`, Spider dev + BIRD dev, 2,567
 questions): through the gateway, a request without an API key gets 401; 6,187
